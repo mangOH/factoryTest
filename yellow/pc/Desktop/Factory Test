@@ -1,0 +1,4 @@
+#!/bin/bash
+
+gnome-terminal --geometry=130x50+0+0 --working-directory=$HOME/factoryTest/YellowTest_Shell -- ./run.sh
+

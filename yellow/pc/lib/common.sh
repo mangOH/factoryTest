@@ -13,16 +13,51 @@ CONNECTION_TIMEOUT=10
 
 #=== FUNCTION =============================================================================
 #
-#        NAME: prompt_char
-# DESCRIPTION: Prompt a messgae to console.
+#        NAME: prompt_enter
+# DESCRIPTION: Prompt a message to terminal and wait for ENTER.
 # PARAMETER 1: message
 #
 #==========================================================================================
-prompt_char() {
+prompt_enter() {
+
     run_time=$(date +"%Y-%m-%d-%H:%M:%S:")
-    echo $run_time $1 >&2
-    read prompt_input
-    echo $(echo $prompt_input | tr 'a-z' 'A-Z')
+    printf "\n$run_time: $1, then press ENTER "
+
+    if ! read prompt_input
+    then
+        echo "ERROR READING INPUT!"
+        exit 1
+    fi
+}
+
+
+#=== FUNCTION =============================================================================
+#
+#        NAME: prompt_yes_no
+# DESCRIPTION: Prompt a message to terminal and wait for 'y' or 'n'
+# PARAMETER 1: message
+#      RETURN: 0 if 'y', 1 if 'n'
+#
+#==========================================================================================
+prompt_yes_no() {
+
+    run_time=$(date +"%Y-%m-%d-%H:%M:%S:")
+    printf "\n$run_time: $1 (Y/N) "
+
+    local resp=""
+
+    while [ "$resp" != "Y" -a "$resp" != "N" ]
+    do
+        if ! read prompt_input
+        then
+            echo "ERROR READING INPUT!"
+            exit 1
+        fi
+
+        local resp=$(echo $prompt_input | tr 'a-z' 'A-Z')
+    done
+
+    test "$resp" = "Y"
 }
 
 
@@ -41,7 +76,9 @@ SshToTarget()
         exit 1
     fi
 
-    ssh -o ConnectTimeout=$CONNECTION_TIMEOUT $TARGET_SSH_OPTS root@$TARGET_IP "$@"
+    echo "Running on target: $@" >&2
+
+    ssh -o ConnectTimeout=$CONNECTION_TIMEOUT -o "StrictHostKeyChecking no" $TARGET_SSH_OPTS root@$TARGET_IP "$@"
 }
 
 
@@ -474,10 +511,10 @@ WaitForDevice()
 {
     if [ $1 == "Up" ]; then
         local posReachMod=""
-        local negReachMod="NOT"
+        local negReachMod="un"
         local resExpected="1"  # the expected return status of nc before target is up
     elif [ $1 == "Down" ]; then
-        local posReachMod="NOT"
+        local posReachMod="un"
         local negReachMod=""
         local resExpected="0"
     else
@@ -494,7 +531,7 @@ WaitForDevice()
 
     local res=$resExpected
     local count=0
-    echo -n "Checking [$TARGET_IP] and proceed until it's $posReachMod reachable"
+    echo -n "Waiting for $TARGET_IP to become ${posReachMod}reachable..."
     while [ $res -eq $resExpected ] && [ $count -lt $timeout ]; do
         nc -z -w 2 $TARGET_IP $TARGET_SSH_PORT > /dev/null
         res=$?
@@ -507,10 +544,10 @@ WaitForDevice()
 
 
     if [ $count -eq $timeout ]; then
-        echo "Target is $negReachMod reachable for [$timeout] secs."
+        echo "TIMEOUT: Target remained ${negReachMod}reachable for longer than $timeout secs."
         return 1
     else
-        echo "Target is $posReachMod reachable before timeout."
+        echo "Condition satisfied. Moving on..."
         return 0
     fi
 }
@@ -545,10 +582,10 @@ WaitForAntennaStatus()
     fi
 
     while [ $timePast -ne $waitTime ]; do
-		networkStatus=$(echo "$(GetCurrentRadioStatus)" | grep -o -c "$expectedRadio")
+        networkStatus=$(echo "$(GetCurrentRadioStatus)" | grep -o -c "$expectedRadio")
 
-		if [[ ${networkStatus} -gt 0 ]]
-		then
+        if [[ ${networkStatus} -gt 0 ]]
+        then
             if [ expectedRadio = "Status:                Registered" ]
             then
                 echo "<antenna connected>"
@@ -581,7 +618,8 @@ WaitForSystemToStart()
     local timePast=0
 
     while [ $timePast -ne $waitTime ]; do
-        if [ "$(GetCurrentSystemIndex)" == "$1" ]; then
+        system_index=$(GetCurrentSystemIndex 2> /dev/null)
+        if [ "$system_index" == "$1" ]; then
             return 0
         fi
 
@@ -675,6 +713,7 @@ RunAndCheckAT()
     fi
     return $flag
 }
+
 #=== FUNCTION =============================================================================
 #
 #        NAME: EchoPassOrFail
@@ -690,6 +729,7 @@ EchoPassOrFail()
         echo -e "\033[1m[FAILED]\033[0m"
     fi
 }
+
 #=== AT FUNCTION ===========================================================================
 #
 #        NAME: GetMdmBootLoaderInfo
@@ -865,9 +905,14 @@ CheckLegatoVersion()
 #==========================================================================================
 ClearTargetLog()
 {
+    echo "Clearing the logs..."
     # Use init.d script to restart log server - seen with Christophe G. replace restart by stop/start because of random restart issue
     SshToTarget "PATH=/legato/systems/current/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin /etc/init.d/syslog stop"
     SshToTarget "PATH=/legato/systems/current/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin /etc/init.d/syslog start"
+
+    sleep 3
+
+    echo "Done."
 
     return $?
 }
@@ -1118,18 +1163,8 @@ LegatoRestart()
 RestoreGoldenLegato()
 {
     SshToTarget "/legato/systems/current/bin/legato stop"
-    SshToTarget "/bin/rm -rf /legato/*"
-
-    if ! RebootTarget
-    then
-        return 1
-    fi
-
-    CurrentSystemIndex=$(SshToTarget "/bin/cat /legato/systems/current/index")
-    if [ "$CurrentSystemIndex" != "0" ]
-    then
-        return 1
-    fi
+    SshToTarget "/bin/rm -rf /legato/mntLegatoVersion /legato/systems /legato/apps"
+    SshToTarget "/bin/fsync /legato"
 
     return 0
 }
@@ -1205,7 +1240,7 @@ GetCurrentRadioStatus()
 #==========================================================================================
 GetCurrentSystemIndex()
 {
-    echo $(SshToTarget "/bin/cat /legato/systems/current/index")
+    SshToTarget "/bin/cat /legato/systems/current/index"
 }
 
 
@@ -1315,16 +1350,4 @@ GetSysLog()
 {
     mkdir -p ./results/"$1"
     ssh root@$TARGET_IP  '/sbin/logread' > ./results/"$1"/syslog_"$2"
-}
-
-#=== FUNCTION =============================================================================
-#
-#        NAME: GetTestLog
-# DESCRIPTION: Get test log of module
-# PARAMETER 1: IMEI of module
-# PARAMETER 2: Run Time
-#==========================================================================================
-GetTestLog()
-{
-    mv test.log ./results/$1/testlog_"$2"
 }

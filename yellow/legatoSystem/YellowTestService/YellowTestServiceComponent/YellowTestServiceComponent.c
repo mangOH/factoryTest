@@ -2,7 +2,6 @@
 #include "interfaces.h"
 #include "i2c-utils.h"
 #include "fileUtils.h"
-#include "uart.h"
 
 #define I2C_HUB_MAIN_BUS    0x00
 #define I2C_HUB_PORT_3      0x08
@@ -94,29 +93,111 @@ le_result_t yellow_test_MeasureSignalStrength
 //--------------------------------------------------------------------------------------------------
 le_result_t yellow_test_UARTLoopBack(void)
 {
-    const char * msg = "The quick brown Fox jumps over the lazy Dog 0123456789\n";
+    le_result_t result = LE_OK;
+    const char* portFile = "/dev/ttyHS0";
+    const char* msg = "The quick brown Fox jumps over the lazy Dog 0123456789\n";
+    const size_t msgLen = strlen(msg);
     char buffer[64];
     memset(buffer, 0, 64);
     int fd = 0;
 
-    fd = serial_open("/dev/ttyHS0");
+    // Open the UART port device file.
+    fd = open("/dev/ttyHS0", O_RDWR);
     if (fd < 0) {
-        fprintf(stderr, "Failed to open serial port '/dev/ttyHS0'\n");
-        exit(EXIT_FAILURE);
+        LE_CRIT("Failed to open serial port '%s': %m", portFile);
+        return LE_NOT_FOUND;
     }
 
-    serial_write(fd, msg, strlen(msg));
-    serial_wait_for_data(3000);
-    serial_read(fd, buffer, 64);
-    LE_INFO("Transfer msg: '%s'", msg);
-    LE_INFO("Received msg: '%s'", buffer);
-    if (strncmp(buffer, msg, strlen(msg)) == 0) {
-        return LE_OK;
-    } else {
-        LE_INFO("Failed to check UART data loopback");
-        return LE_FAULT;
+    // Write the message to it.
+    int res = write(fd, msg, msgLen);
+    if (res != msgLen)
+    {
+        if (res == -1)
+        {
+            LE_CRIT("Error writing to '%s': %m", portFile);
+            result = LE_IO_ERROR;
+            goto done;
+        }
     }
+
+    // Wait for bytes to arrive on the port.
+    struct pollfd pollStruct = { .fd = fd, .events = POLLIN, .revents = 0 };
+    res = poll(&pollStruct, 1, 2000 /* ms */);
+    if (res == -1)
+    {
+        LE_CRIT("Error returned by poll(): %m");
+        result = LE_IO_ERROR;
+        goto done;
+    }
+    if (res == 0)
+    {
+        LE_CRIT("Timeout waiting to receive.");
+        result = LE_TIMEOUT;
+        goto done;
+    }
+    if (res != 1)
+    {
+        LE_CRIT("Unexpected return value (%d) from poll().", res);
+        result = LE_OUT_OF_RANGE;
+        goto done;
+    }
+    if (pollStruct.revents != POLLIN)
+    {
+        LE_CRIT("Unexpected event code (%d) returned by poll().", pollStruct.revents);
+        result = LE_OUT_OF_RANGE;
+        goto done;
+    }
+
+    // Sleep to ensure that there has been time to receive all the bytes.
+    sleep(1);
+
+    // Read the bytes received.
+    res = read(fd, buffer, sizeof(buffer));
+    if (res == -1)
+    {
+        LE_CRIT("Error returned by read(): %m");
+        result = LE_IO_ERROR;
+        goto done;
+    }
+
+    // Make sure no bytes were lost.
+    if (res != msgLen)
+    {
+        LE_CRIT("Unexpected number of bytes read: %d (expected %zu)", res, msgLen);
+
+        // Null-terminate the received string.
+        if (res == sizeof(buffer))
+        {
+            res -= 1;
+        }
+        buffer[res] = '\0';
+
+        LE_CRIT("%s", buffer);
+
+        result = LE_IO_ERROR;
+        goto done;
+    }
+
+    // Make sure not bytes were corrupted.
+    if (strncmp(buffer, msg, msgLen) != 0)
+    {
+        LE_CRIT("Loop-back message received does not match message sent.");
+        LE_CRIT("Sent:  '%s'", msg);
+
+        // Null-terminate the received string before logging it.
+        buffer[res] = '\0';
+
+        LE_CRIT("Recvd: '%s'", buffer);
+
+        result = LE_IO_ERROR;
+        goto done;
+    }
+
+done:
+    close(fd);
+    return result;
 }
+
 
 //--------------------------------------------------------------------------------------------------
 /**

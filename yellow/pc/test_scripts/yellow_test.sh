@@ -1,21 +1,58 @@
-#!/bin/bash
+#!/bin/ash
 # Note: run on target
+
+# Exit immediately on SIGHUP, SIGINT or SIGTERM.
+trap 'printf "\nINTERRUPT RECEIVED. EXITING.\n" ; exit 1' 1 2 15
+
 source /tmp/yellow_testing/configuration.cfg
-echo "MangOH Yellow factory testing"
 
 #=== FUNCTION =============================================================================
 #
-#        NAME: prompt_char
-# DESCRIPTION: Prompt a messgae to console.
+#        NAME: prompt_enter
+# DESCRIPTION: Prompt a message to terminal and wait for ENTER.
 # PARAMETER 1: message
 #
 #==========================================================================================
-prompt_char() {
+prompt_enter() {
+
     run_time=$(date +"%Y-%m-%d-%H:%M:%S:")
-    echo $run_time $1 >&2
-    echo $1 >&2
-    read prompt_input
-    echo $(echo $prompt_input | tr 'a-z' 'A-Z')
+    printf "$run_time: $1, then press ENTER "
+
+    if ! read prompt_input
+    then
+        echo "ERROR READING INPUT!"
+        exit 1
+    fi
+}
+
+
+#=== FUNCTION =============================================================================
+#
+#        NAME: prompt_yes_no
+# DESCRIPTION: Prompt a message to terminal and wait for 'y' or 'n'
+# PARAMETER 1: message
+#      RETURN: 0 if 'y', 1 if 'n'
+#
+#==========================================================================================
+prompt_yes_no() {
+
+    run_time=$(date +"%Y-%m-%d-%H:%M:%S:")
+    printf "$run_time: $1 (Y/N) "
+
+    local resp=""
+
+    while [ "$resp" != "Y" -a "$resp" != "N" ]
+    do
+        if ! read prompt_input
+        then
+            echo "ERROR READING INPUT!"
+            exit 1
+        fi
+
+        local resp=$(echo $prompt_input | tr 'a-z' 'A-Z')
+    done
+
+    test "$resp" = "Y"
 }
 
 
@@ -30,39 +67,37 @@ prompt_char() {
 #
 #===============================================================================
 triLED() {
-	local triLEDRed="/sys/devices/platform/expander.0/tri_led_red"
-	local triLEDGreen="/sys/devices/platform/expander.0/tri_led_grn"
-	local triLEDBlue="/sys/devices/platform/expander.0/tri_led_blu"
+    local triLEDRed="/sys/devices/platform/expander.0/tri_led_red"
+    local triLEDGreen="/sys/devices/platform/expander.0/tri_led_grn"
+    local triLEDBlue="/sys/devices/platform/expander.0/tri_led_blu"
 
-	local ledFile=""
-	if [ "$1" = "red" ]
-	then
-		local ledFile=$triLEDRed
-	else
-		if [ "$1" = "green" ]
-		then
-			local ledFile=$triLEDGreen
-		else
-			if [ "$1" = "blue" ]
-			then
-				local ledFile=$triLEDBlue
-			else
-				echo "Unknown tri-LED" >&2
-			fi
-		fi
-	fi
+    local ledFile=""
+    if [ "$1" = "red" ]
+    then
+        local ledFile=$triLEDRed
 
-	if [ "$2" = "on" ]
-	then
-		echo 1 > "$ledFile"
-	else
-		if [ "$2" = "off" ]
-		then
-			echo 0 > "$ledFile"
-		else
-			echo "Unknown LED state" >&2
-		fi
-	fi
+    elif [ "$1" = "green" ]
+    then
+        local ledFile=$triLEDGreen
+
+    elif [ "$1" = "blue" ]
+    then
+        local ledFile=$triLEDBlue
+    else
+        echo "Unknown tri-LED"
+        return
+    fi
+
+    if [ "$2" = "on" ]
+    then
+        echo "1" > "$ledFile"
+
+    elif [ "$2" = "off" ]
+    then
+        echo "0" > "$ledFile"
+    else
+        echo "Unknown LED state"
+    fi
 }
 
 #=== FUNCTION ==================================================================
@@ -75,19 +110,19 @@ triLED() {
 #
 #===============================================================================
 genericLED() {
-	local genericLEDPath="/sys/devices/platform/expander.0/generic_led"
+    local genericLEDPath="/sys/devices/platform/expander.0/generic_led"
 
-	if [ "$1" = "on" ]
-	then
-		echo 1 > "$genericLEDPath"
-	else 
-		if [ "$1" = "off" ]
-		then
-			echo 0 > "$genericLEDPath"
-		else
-			echo "Unknown Generic LED state" >&2
-		fi
-	fi
+    if [ "$1" = "on" ]
+    then
+        echo 1 > "$genericLEDPath"
+    else
+        if [ "$1" = "off" ]
+        then
+            echo 0 > "$genericLEDPath"
+        else
+            echo "Unknown Generic LED state"
+        fi
+    fi
 }
 
 #=== FUNCTION ==================================================================
@@ -101,17 +136,16 @@ genericLED() {
 #
 #===============================================================================
 generic_button_init() {
-	if [ -d "/sys/class/gpio/gpio25" ]
-	then
-		echo "Button had been intialized, already" >&2
-	else
-		echo 25 > "/sys/class/gpio/export"
-		if [ $? != 0 ]
-		then
-			return 1
-		fi
-	fi
-	return 0
+    if [ -d "/sys/class/gpio/gpio25" ]
+    then
+        echo "Button had been intialized, already"
+    else
+        if ! echo "25" > "/sys/class/gpio/export"
+        then
+            return 1
+        fi
+    fi
+    return 0
 }
 
 #=== FUNCTION ==================================================================
@@ -125,17 +159,16 @@ generic_button_init() {
 #
 #===============================================================================
 generic_button_deinit() {
-	if [ -d "/sys/class/gpio/gpio25" ]
-	then
-		echo 25 > "/sys/class/gpio/unexport"
-		if [ $? != 0 ]
-		then
-			return 1
-		fi
-	else
-		echo "Button had been deintialized, already" >&2
-	fi
-	return 0
+    if [ -d "/sys/class/gpio/gpio25" ]
+    then
+        if ! echo 25 > "/sys/class/gpio/unexport"
+        then
+            return 1
+        fi
+    else
+        echo "Button had been deintialized, already"
+    fi
+    return 0
 }
 
 #=== FUNCTION ==================================================================
@@ -148,19 +181,27 @@ generic_button_deinit() {
 #
 #===============================================================================
 generic_button_get_state() {
-	local buttonFile="/sys/class/gpio/gpio25/value"
-	local res="unknown"
-	r=$(cat $buttonFile)
-	if [ "$r" = "1" ]
-	then
-		local res="pressed"
-	else
-		if [ "$r" = "0" ]
-		then
-			local res="released"
-		fi
-	fi
-	echo "$res"
+
+    local buttonFile="/sys/class/gpio/gpio25/value"
+
+    if ! r=$(cat $buttonFile)
+    then
+        echo "ERROR: Failed to read button GPIO file '$buttonFile'" >&2
+        return 1
+    fi
+
+    # NOTE: The button is active-low, so pressed is 0 and released is 1.
+    if [ "$r" = "1" ]
+    then
+        echo "released"
+
+    elif [ "$r" = "0" ]
+    then
+        echo "pressed"
+    else
+        echo "ERROR: Unexpected button state: '$r'" >&2
+        return 1
+    fi
 }
 
 #=== FUNCTION ==================================================================
@@ -173,15 +214,15 @@ generic_button_get_state() {
 #
 #===============================================================================
 buzzer_set() {
-	if [ "$TARGET_TYPE" = "wp85" ]
-	then
-		echo "$1" > "/sys/bus/i2c/drivers/rtc-pcf85063/4-0051/clkout_freq"
-	else
-		if [ "$TARGET_TYPE" = "wp76xx" ]
-		then
-			echo "$1" > "/sys/bus/i2c/drivers/rtc-pcf85063/8-0051/clkout_freq"
-		fi
-	fi
+    if [ "$TARGET_TYPE" = "wp85" ]
+    then
+        echo "$1" > "/sys/bus/i2c/drivers/rtc-pcf85063/4-0051/clkout_freq"
+    else
+        if [ "$TARGET_TYPE" = "wp76xx" -o "$TARGET_TYPE" = "wp77xx" ]
+        then
+            echo "$1" > "/sys/bus/i2c/drivers/rtc-pcf85063/8-0051/clkout_freq"
+        fi
+    fi
 }
 
 #=== FUNCTION ==================================================================
@@ -195,69 +236,30 @@ buzzer_set() {
 #
 #===============================================================================
 test_buzzer() {
-	# Press button and listen for buzzer;
-	# start background function
-	ButtonMonitor &
-	local bgid=$!
 
-	local resp=""
-	while [ "$resp" != "Y" ] && [ "$resp" != "N" ]
-	do
-		local resp=$(prompt_char "Press generic button and listen for buzzer. Do you hear the buzzer's sound when pressing button? (Y/N)")
-	done
-	if [ "$resp" = "N" ]
-	then
-		echo "Buzzer has problem." >&2
-		kill $bgid
-		wait $bgid
+    # Press button and listen for buzzer;
+    # start background function
+    ButtonMonitor &
+    local bgid=$!
 
-		failure_msg="Buzzer did not work"
-		test_result="FAILED"
-		return 1
-	fi
-	
-	kill $bgid
-	wait $bgid
+    prompt_yes_no "Press generic button and listen for buzzer. Do you hear the buzzer's sound when pressing button?"
+    local result=$?
 
-	failure_msg=""
-	test_result="PASSED"
-	return 0
+    kill $bgid
+    wait $bgid
+
+    if [ $result -ne 0 ]
+    then
+        failure_msg="Buzzer test failed"
+        test_result="FAILED"
+        return 1
+    fi
+
+    failure_msg=""
+    test_result="PASSED"
+    return 0
 }
 
-
-#=== FUNCTION ==================================================================
-#
-#        NAME: test_reset
-# DESCRIPTION: Test the reset button
-#   PARAMETER: None
-#
-#   RETURNS 1: PASSED/FAILED
-#   RETURNS 2: Failure message
-#
-#===============================================================================
-test_reset() {
-	# Press button and listen for buzzer;
-	# start background function
-	prompt_char "Press reset button then press ENTER"
-
-	local resp=""
-	while [ "$resp" != "Y" ] && [ "$resp" != "N" ]
-	do
-		local resp=$(prompt_char "Confirm hardware-controlled LED goes green (Y/N)")
-	done
-	if [ "$resp" = "N" ]
-	then
-		echo "Reset Button has problem." >&2
-		failure_msg="Reset Button has problem"
-		test_result="FAILED"
-		return 1
-	fi
-
-	failure_msg=""
-	
-	return 0
-	
-}
 
 #=== FUNCTION ==================================================================
 #
@@ -266,35 +268,28 @@ test_reset() {
 #            : Should be run in background
 #   PARAMETER: None
 #
-#     RETURNS: None
+#     RETURNS: 0 on success, 1 on failure
 #
 #===============================================================================
 ButtonMonitor() {
-	local last_state=""
-	while true
-	do
-		button_state=$(generic_button_get_state)
-		if [ "$button_state" = "pressed" ]
-		then
-			if [ "$last_state" != "$button_state" ]
-			then
-				local last_state=$button_state
-				buzzer_set "4096"
-			fi
-		else
-			if [ "$button_state" = "released" ]
-			then
-				if [ "$last_state" != "$button_state" ]
-				then
-					local last_state=$button_state
-					buzzer_set "0"
-				fi
-			else
-				local last_state=$button_state
-			fi
-		fi
-		# sleep 1
-	done
+
+    local last_state=""
+
+    while local button_state=$(generic_button_get_state)
+    do
+        if [ "$last_state" != "$button_state" ]
+        then
+            local last_state="$button_state"
+
+            if [ "$button_state" = "pressed" ]
+            then
+                buzzer_set "4096"
+            else
+                buzzer_set "0"
+            fi
+        fi
+
+    done
 }
 
 #=== FUNCTION ==================================================================
@@ -303,30 +298,21 @@ ButtonMonitor() {
 # DESCRIPTION: Read value of light sensor
 #   PARAMETER: None
 #
-#     RETURNS: Light sensor value in illuminance
+#      PRINTS: Light sensor value in illuminance
+#     RETURNS: 0 on success, 1 on failure
 #
 #===============================================================================
 read_light_sensor() {
-	local light_sensor_path="/sys/bus/iio/devices/iio:device1/in_illuminance_input"
-	local light_value=$(cat $light_sensor_path)
-	echo "Light Sensor Value: '$light_value'" >&2
-	echo "$light_value"
-}
+    local light_sensor_path="/sys/bus/iio/devices/iio:device1/in_illuminance_input"
+    if ! local light_value=$(cat $light_sensor_path | sed 's/\..*$//')
+    then
+        echo "ERROR: can't read $light_sensor_path" >&2
+        return 1
+    fi
 
-#=== FUNCTION ==================================================================
-#
-#        NAME: numCompare
-# DESCRIPTION: Compare two number
-# PARAMETER 1: number1
-# PARAMETER 2: number2
-#
-#    RETURNS: 0 number1 is less than number2 + 100
-#             1 number1 is greater than number2 + 100
-#
-#===============================================================================
-numCompare() {
-	local res=$(awk -v n1="$1" -v n2="$2" -v res="0" 'BEGIN {print (n1>n2+100?"1":"0") }')
-	return $res
+    echo "Light Sensor Value: '$light_value'" >&2
+
+    echo "$light_value"
 }
 
 #=== FUNCTION ==================================================================
@@ -340,100 +326,39 @@ numCompare() {
 #
 #===============================================================================
 test_light_sensor() {
-	#     Cover light sensor with finger and confirm software-controlled tri-colour LED goes blue;
-	#     (On-board test software should look for light sensor interrupt.)
-	local before_cover_value=$(read_light_sensor)
-	prompt_char "Please cover the light sensor with your finger then press ENTER"
-	local after_cover_value=$(read_light_sensor)
-	numCompare $before_cover_value $after_cover_value
-	if [ $? = 1 ]
-	then
-		# triLED go blue
-		triLED "red" "off"
-		triLED "green" "off"
-		triLED "blue" "on"
-	fi
 
-	local resp=""
-	while [ "$resp" != "Y" ] && [ "$resp" != "N" ]
-	do
-		local resp=$(prompt_char "Do you see blue light of LED? (Y/N)")
-	done
-	if [ "$resp" = "N" ]
-	then
-		echo "Light sensor has problem." >&2
-		failure_msg="Light sensor has problem"
-		test_result="FAILED"
-		return 1
-	fi
+    if ! uncovered_light=$(read_light_sensor)
+    then
+        failure_msg="Can't read light sensor"
+        echo "$failure_msg"
+        test_result="FAILED"
+        return 1
+    fi
 
-	#     Uncover light sensor and confirm LED returns to yellow;
-	local resp=$(prompt_char "Please uncover the light sensor then press ENTER")
-	local after_uncover_value=$(read_light_sensor)
-	numCompare $after_uncover_value $after_cover_value
-	if [ $? = 1 ]
-	then
-		# triLED go yellow
-		triLED "red" "on"
-		triLED "green" "on"
-		triLED "blue" "off"
-	fi
-	local resp=""
-	while [ "$resp" != "Y" ] && [ "$resp" != "N" ]
-	do
-		local resp=$(prompt_char "Do you see yellow light of LED? (Y/N)")
-	done
-	if [ "$resp" = "N" ]
-	then
-		echo "Light sensor has problem." >&2
-		failure_msg="Light sensor has problem"
-		test_result="FAILED"
-		return 1
-	fi
+    prompt_enter "Please cover the light sensor with your finger"
 
-	failure_msg=""
-	
-	return 0
+    if ! covered_light=$(read_light_sensor)
+    then
+        failure_msg="Can't read light sensor after it was covered"
+        echo "$failure_msg"
+        test_result="FAILED"
+        return 1
+    fi
+
+    # The difference in the reading should be more than 10 times brighter when
+    # uncovered vs when covered with a finger.
+    covered_times_ten=$(dc $covered_light 10 * p)
+    if [ $covered_times_ten -ge $uncovered_light ]
+    then
+        failure_msg="Light sensor has a problem"
+        echo "$failure_msg"
+        test_result="FAILED"
+        return 1
+    fi
+
+    failure_msg=""
+    return 0
 }
-
-#=== FUNCTION ==================================================================
-#
-#        NAME: write_eeprom
-# DESCRIPTION: test eeprom writing
-#   PARAMETER: None
-#
-#   RETURNS 1: PASSED/FAILED
-#   RETURNS 2: Failure message
-#
-#===============================================================================
-write_eeprom() {
-	local eeprom_path=""
-	if [ "$TARGET_TYPE" = "wp85" ]
-	then
-		local eeprom_path="/sys/bus/i2c/devices/0-0050/eeprom"
-	else
-		if [ "$TARGET_TYPE" = "wp76xx" ]
-		then
-			local eeprom_path="/sys/bus/i2c/devices/4-0050/eeprom"
-		fi
-	fi
-
-	# msg="mangOH Yellow\\nRev: 1.0\\nDate: $time_str\\nMfg: Talon Communications\\0"
-	msg="mangOH Yellow DV3\x00"
-
-	echo -n -e "$msg" > "$eeprom_path"
-	if [ $? != 0 ]
-	then
-		failure_msg="Failed to write to EEPROM"
-		test_result="FAILED"
-		return 1
-	fi
-
-	failure_msg=""
-	
-	return 0
-}
-
 
 #=== FUNCTION ==================================================================
 #
@@ -446,36 +371,50 @@ write_eeprom() {
 #
 #===============================================================================
 yellowManualTest_initial() {
-	# initial generic button
-	generic_button_init
-	if [ $? != 0 ]
-	then
-		echo "Failed to initial Generic Button"
-		exit -1
-	fi
-	
-	triLED "red" "off"
-	triLED "green" "on"
-	triLED "blue" "off"
 
-	prompt_char "Wait for software-controlled tri-colour LED to turn green (ready for manual test). press ENTER"
+    failure_msg=""
 
-	local resp=""
-	while [ "$resp" != "Y" ] && [ "$resp" != "N" ]
-	do
-		local resp=$(prompt_char "Do you see software-controlled LED goes green? (Y/N)")
-	done
-	if [ "$resp" = "N" ]
-	then
-		echo "Software-controller LED has problem." >&2
-		failure_msg="Software-controller LED has problem"
-		test_result="FAILED"
-		return 1
-	fi
+    # initialize generic button
+    if ! generic_button_init
+    then
+        echo "Failed to initialize Generic Button"
+        exit -1
+    fi
 
-	failure_msg=""
-	test_result="PASSED"
-	return 0
+    triLED "red" "off"
+    triLED "green" "off"
+    triLED "blue" "off"
+
+    if ! prompt_yes_no "Is the HARDware-controlled LED yellow?"
+    then
+        failure_msg="Wrong hardware-controlled LED state"
+        echo "$failure_msg"
+        test_result="FAILED"
+        return 1
+    fi
+
+    triLED "red" "on"
+    triLED "green" "on"
+    triLED "blue" "on"
+
+    if ! prompt_yes_no "Is the SOFTware-controlled LED white?"
+    then
+        failure_msg="Software-controlled LED has a problem"
+    fi
+
+    triLED "red" "off"
+    triLED "green" "off"
+    triLED "blue" "off"
+
+    if [ "$failure_msg" ]
+    then
+        echo "$failure_msg"
+        test_result="FAILED"
+        return 1
+    fi
+
+    test_result="PASSED"
+    return 0
 }
 
 #=== FUNCTION ==================================================================
@@ -489,29 +428,36 @@ yellowManualTest_initial() {
 #
 #===============================================================================
 yellowTest_WifiScan() {
-	
-	/legato/systems/current/bin/wifi client start >&2
-	if [ $? = 0 ]
-	then
-		echo 'start wifi successflly' >&2
-	else
-		echo 'Unable to start wifi' >&2
-		return 1
-	fi
 
-	sleep 2
+    # sleep 30
 
-	/legato/systems/current/bin/wifi client scan | grep "$WIFI_ACCESSPOINT" >&2
-	if [ $? = 0 ]
-	then
-		echo "Able to find wifi Accesspoint $WIFI_ACCESSPOINT" >&2
-	else
-		echo "Unable to find wifi Accesspoint $WIFI_ACCESSPOINT" >&2
-		return 1
-	fi
+    /legato/systems/current/bin/wifi client start
+    if [ $? -eq 0 ]
+    then
+        echo 'WiFi started successfully'
+    else
+        failure_msg='Unable to start WiFi'
+        echo "$failure_msg"
+        result=1
+    fi
 
-	failure_msg=""
-	return 0
+    sleep 2
+
+    local result=0
+    failure_msg=""
+
+    if /legato/systems/current/bin/wifi client scan | grep "$WIFI_ACCESSPOINT"
+    then
+        echo "Found WiFi Accesspoint $WIFI_ACCESSPOINT"
+    else
+        failure_msg="Unable to find WiFi Accesspoint $WIFI_ACCESSPOINT"
+        echo "$failure_msg"
+        result=1
+    fi
+
+    /legato/systems/current/bin/wifi client stop
+
+    return $result
 }
 
 
@@ -527,55 +473,56 @@ yellowTest_WifiScan() {
 #
 #===============================================================================
 yellowTest_uSD() {
-	
-	/bin/mkdir /tmp/sd
-	if [ $? = 0 ]
-	then
-		echo 'Create sd directory successflly' >&2
-	else
-		echo 'Create sd directory unsuccessflly' >&2
-		return 1
-	fi
 
-	/bin/mount -ofmask=0111 -odmask=0000 -osmackfsdef=sd /dev/mmcblk0p1 /tmp/sd
+    failure_msg=""
 
-	if [ $? = 0 ]
-	then
-		echo 'Mount sd directory successflly' >&2
-	else
-		echo 'Mount sd directory unsuccessflly' >&2
-		return 1
-	fi
+    if /bin/mkdir /tmp/sd
+    then
+        echo 'Created directory for SD card successfully'
+    else
+        echo 'Failed to create directory for SD card.'
+        return 1
+    fi
 
-	/bin/touch /tmp/sd/log.txt
-	if [ $? = 0 ]
-	then
-		echo 'Create file on SDcard successflly' >&2
-	else
-		echo 'Create file on SDcard unsuccessflly' >&2
-		return 1
-	fi
+    if /bin/mount -ofmask=0111 -odmask=0000 -osmackfsdef=sd /dev/mmcblk0p1 /tmp/sd
+    then
+        echo 'Mounted SD card successfully'
+    else
+        echo 'Failed to mount SD card.'
+        return 1
+    fi
 
-	/bin/echo foo >> /tmp/sd/log.txt
-	if [ $? = 0 ]
-	then
-		echo 'Write file on SDcard successflly' >&2
-	else
-		echo 'Write file on SDcard unsuccessflly' >&2
-		return 1
-	fi
+    if /bin/touch /tmp/sd/log.txt
+    then
+        echo 'Create file on SD card successfully'
+    else
+        echo 'Failed to create file on SD card'
+        return 1
+    fi
 
-	/bin/cat /tmp/sd/log.txt
-	if [ $? = 0 ]
-	then
-		echo 'Read file on SDcard successflly' >&2
-	else
-		echo 'Read file on SDcard unsuccessflly' >&2
-		return 1
-	fi
+    if /bin/echo "foo" >> /tmp/sd/log.txt
+    then
+        echo 'Wrote to file on SD card successfully'
+    else
+        echo 'Failed to write to file on SD card'
+        return 1
+    fi
 
-	failure_msg=""
-	return 0
+    if local sdContent=$(/bin/cat /tmp/sd/log.txt)
+    then
+        if [ "$sdContent" = "foo" ]
+        then
+            echo 'SD card content read back successfully'
+        else
+            echo "SD card contents didn't match what was written"
+            return 1
+        fi
+    else
+        echo 'Failed to read Read file on SDcard unsuccessfully'
+        return 1
+    fi
+
+    return 0
 }
 
 #=== FUNCTION ==================================================================
@@ -589,42 +536,45 @@ yellowTest_uSD() {
 #
 #===============================================================================
 yellowTest_USB() {
-	
-	if [ -d "/sys/devices/7c00000.hsic_host/usb1/1-1/1-1.1" ]
-	then
-		echo "USB device 1-1.1 exist" >&2
-	else
-		echo "USB device 1-1.1 doesn't exist" >&2
-		return 1
-	fi
 
-	if [ -d "/sys/devices/7c00000.hsic_host/usb1/1-1/1-1.2" ]
-	then
-		echo "USB device 1-1.2 exist" >&2
-	else
-		echo "USB device 1-1.2 doesn't exist" >&2
-		return 1
-	fi
+    if [ -d "/sys/devices/7c00000.hsic_host/usb1/1-1/1-1.1" ]
+    then
+        echo "USB device 1-1.1 exists"
+    else
+        failure_msg="USB device 1-1.1 doesn't exist"
+        echo "$failure_msg"
+        return 1
+    fi
 
-	if [ -d "/sys/devices/7c00000.hsic_host/usb1/1-1/1-1.3" ]
-	then
-		echo "USB device 1-1.3 exist" >&2
-	else
-		echo "USB device 1-1.3 doesn't exist" >&2
-		return 1
-	fi
+    if [ -d "/sys/devices/7c00000.hsic_host/usb1/1-1/1-1.2" ]
+    then
+        echo "USB device 1-1.2 exists"
+    else
+        failure_msg="USB device 1-1.2 doesn't exist"
+        echo "$failure_msg"
+        return 1
+    fi
 
-	if [ -d "/sys/devices/7c00000.hsic_host/usb1/1-1/1-1:1.0" ]
-	then
-		echo "USB device 1-1:1.0 exist" >&2
-	else
-		echo "USB device 1-1:1.0 doesn't exist" >&2
-		return 1
-	fi
-	
+    if [ -d "/sys/devices/7c00000.hsic_host/usb1/1-1/1-1.3" ]
+    then
+        echo "USB device 1-1.3 exists"
+    else
+        failure_msg="USB device 1-1.3 doesn't exist"
+        echo "$failure_msg"
+        return 1
+    fi
 
-	failure_msg=""
-	return 0
+    if [ -d "/sys/devices/7c00000.hsic_host/usb1/1-1/1-1:1.0" ]
+    then
+        echo "USB device 1-1:1.0 exists"
+    else
+        failure_msg="USB device 1-1:1.0 doesn't exist"
+        echo "$failure_msg"
+        return 1
+    fi
+
+    failure_msg=""
+    return 0
 }
 
 #=== FUNCTION ==================================================================
@@ -638,247 +588,80 @@ yellowTest_USB() {
 #
 #===============================================================================
 yellowTest_I2CDetect() {
-	echo "Stop legato ..." >&2
-	/legato/systems/current/bin/legato stop
-	if [ $? = 0 ]
-	then
-		echo 'Stop Legato successflly' >&2
-	else
-		echo 'Unable to stop Legato' >&2
-		return 1
-	fi
+    echo "Stop legato ..."
+    if /legato/systems/current/bin/legato stop
+    then
+        echo 'Stopped Legato successfully'
+    else
+        echo 'Unable to stop Legato'
+        return 1
+    fi
 
-	echo "Enable all the ports on the hub" >&2
-	/usr/sbin/i2cset -y 4 0x71 0x0f
+    echo "Enable all the ports on the I2C hub"
+    /usr/sbin/i2cset -y 4 0x71 0x0f
 
-	for address in 50 71 08 68 76 44 6b 3e 51
-	do
-		/usr/sbin/i2cdetect -y -r 4 | grep " $address "
-		if [ $? = 0 ]
-		then
-			echo "Detected I2C address $address" >&2
-		else
-			echo "I2C address $address does not exist" >&2
-			return 1
-		fi
-	done
+    # Do the I2C bus scan
+    echo "Scanning the I2C bus..."
+    i2c_scan=$(/usr/sbin/i2cdetect -y -r 4)
+    echo "$i2c_scan"
 
-	/legato/systems/current/bin/legato start
-	sleep 10
-	failure_msg=""
-	return 0
+    local result=0
+    failure_msg=""
+
+    for address in 08 50 71 68 76 44 6b 3e 51
+    do
+        if echo "$i2c_scan" | grep " $address " > /dev/null
+        then
+            echo "PASS: Detected I2C address $address"
+        else
+            echo "FAIL: I2C address $address missing!"
+            result=1
+        fi
+    done
+
+    # This is to stop scary error messages from appearing when Legato starts.
+    /bin/touch /etc/resolv.conf
+
+    # Restart legato
+    /legato/systems/current/bin/legato start
+    sleep 10
+
+    return $result
 }
+
 
 #=== FUNCTION ==================================================================
 #
-#        NAME: yellowManualTest_final
-# DESCRIPTION: Perform the initial test
-#   PARAMETER: None
-#
-#   RETURNS 1: PASSED/FAILED
-#   RETURNS 2: Failure message
-#
-#===============================================================================
-yellowManualTest_final() {
-	# 18. Switch cellular antenna selection DIP switch;
-	#prompt_char "Switch cellular antenna selection DIP switch then press ENTER"
-	# 19. Press button to finalize the test;
-	echo "Press generic button to finalize the test" >&2
-	#     (On-board test software should verify that the correct string has been written to the NFC tag.)
-	# 20. Confirm software-controlled tri-colour LED has changed to white;
-	while true
-	do
-		if [ "$(generic_button_get_state)" = "pressed" ]
-		then
-			triLED "red" "on"
-			triLED "green" "on"
-			triLED "blue" "on"
-			break
-		# sleep 1
-		fi
-	done
-
-	local resp=""
-	while [ "$resp" != "Y" ] && [ "$resp" != "N" ]
-	do
-		local resp=$(prompt_char "Do you see software-controlled LED goes white? (Y/N)")
-	done
-	if [ "$resp" = "N" ]
-	then
-		echo "Failed to final the test." >&2
-		failure_msg="Failed to final the test"
-		test_result="FAILED"
-		return 1
-	fi
-	
-	# 21. Confirm hardware-controlled LED is yellow;
-	local resp=""
-	while [ "$resp" != "Y" ] && [ "$resp" != "N" ]
-	do
-		local resp=$(prompt_char "Do you see hardware-controlled LED goes yellow? (Y/N)")
-	done
-
-	if [ "$resp" = "N" ]
-	then
-		failure_msg="Wrong hardware-controlled LED state"
-		test_result="FAILED"
-		return 1
-	fi
-
-	# 22. Press reset button;
-	# 23. Confirm  rdware-controlled LED goes green;
-	# 24. Remove power jumper;
-	# 25. Disconnect from USB;
-	# 26. Disconnect battery;
-	# 27. Unplug SIM, SD card, IoT card and expansion-connector test board.
-	failure_msg=""
-	return 0
-}
-
-#=== FUNCTION ==================================================================
-#
-#        NAME: test_automation
-# DESCRIPTION: Perform the automation test
+#        NAME: self_test
+# DESCRIPTION: Perform the automated self tests implemented by the yellowtest command
 #   PARAMETER: None
 #
 #   RETURNS 1: 0 Success
 #   RETURNS 2: 1 Failure
 #
 #===============================================================================
-test_automation() {
-	echo "Running Automation Test..." >&2
+self_test() {
 
-	PATH=/legato/systems/current/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin /etc/init.d/syslog stop
-	sleep 2
-	PATH=/legato/systems/current/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin /etc/init.d/syslog start
-	sleep 2
-	/legato/systems/current/bin/app restart YellowTestService	
-	sleep 2
-	/legato/systems/current/bin/app restart YellowTest
-	sleep 2
+    echo "Starting automated tests daemon..."
 
-	#echo 'Test SIM state"' >&2
-	/sbin/logread | grep "Check SIM state: PASSED"
-	if [ $? = 0 ]
-	then
-		echo 'Check SIM state: PASSED' >&2
-	else
-		echo 'Check SIM state: FAILED' >&2
-		/legato/systems/current/bin/app stop YellowTest
-		failure_msg='FAILED: Cannot find: "Check SIM state: PASSED"' 
-		test_result="FAILED"
-		return 1
-	fi
+    if ! /legato/systems/current/bin/app start YellowTestService
+    then
+        failure_msg="Failed to start automated testing service daemon"
+    else
+        echo "Running Automated Tests..."
 
-	#echo 'Test signal quality' >&2
-	/sbin/logread | grep "Check signal quality: PASSED"
-	if [ $? = 0 ]
-	then
-		echo 'Check signal quality: PASSED' >&2
-	else
-		echo 'Check signal quality: FAILED' >&2
-		/legato/systems/current/bin/app stop YellowTest
-		failure_msg='FAILED: Cannot find: "Check signal quality: PASSED"'
-		test_result="FAILED"
-		return 1
-	fi
+        if /legato/systems/current/bin/yellowtest
+        then
+            failure_msg=""
+            test_result="PASSED"
+            return 0
+        else
+            failure_msg="On-device automated tests failed"
+        fi
+    fi
 
-	#echo 'Test Read Battery Voltage"' >&2
-	/sbin/logread | grep "Read Battery Voltage: PASSED"
-	if [ $? = 0 ]
-	then
-		echo 'Read Battery Voltage: PASSED' >&2
-	else
-		echo 'Read Battery Voltage: FAILED' >&2
-		/legato/systems/current/bin/app stop YellowTest
-		failure_msg='FAILED: Cannot find: "Read Battery Voltage PASSED"'
-		test_result="FAILED"
-		return 1
-	fi
-
-	#echo 'Test IoTCardReadADCs"' >&2
-	/sbin/logread | grep "Check IoTCardReadADCs: PASSED"
-	if [ $? = 0 ]
-	then
-		echo 'Check IoTCardReadADCs: PASSED' >&2
-	else
-		echo 'Check IoTCardReadADCs: FAILED' >&2
-		/legato/systems/current/bin/app stop YellowTest
-		failure_msg='FAILED: Cannot find: "Check IoTCardReadADCs: PASSED"'
-		test_result="FAILED"
-		return 1
-	fi
-
-	#echo 'Test IOTCardReset"' >&2
-	/sbin/logread | grep "IOTCardReset: PASSED"
-	if [ $? = 0 ]
-	then
-		echo 'IOTCardReset: PASSED' >&2
-	else
-		echo 'IOTCardReset: FAILED' >&2
-		/legato/systems/current/bin/app stop YellowTest
-		failure_msg='FAILED: Cannot find: "IOTCardReset: PASSED"'
-		test_result="FAILED"
-		return 1
-	fi
-
-	#echo 'Test IOTCardReset"' >&2
-	/sbin/logread | grep "Check UART Loop back: PASSED"
-	if [ $? = 0 ]
-	then
-		echo 'UART LoopBack: PASSED' >&2
-	else
-		echo 'UART LoopBack: FAILED' >&2
-		/legato/systems/current/bin/app stop YellowTest
-		failure_msg='FAILED: Cannot find: "UART Loop back: PASSED"'
-		test_result="FAILED"
-		return 1
-	fi
-
-	#echo 'Test Read ADC3' >&2
-	/sbin/logread | grep "Read ADC3: PASSED"
-	if [ $? = 0 ]
-	then
-		echo 'Read ADC3: PASSED' >&2
-	else
-		echo 'Read ADC3: FAILED' >&2
-		/legato/systems/current/bin/app stop YellowTest
-		failure_msg='FAILED: Cannot find: "Read ADC3: PASSED"'
-		test_result="FAILED"
-		return 1
-	fi
-
-	# Waiting DV4 for SDIO selection on DIP switch to switch between wifi and uSD
-	# echo 'Checking message "SDCard Read/Wrire test PASSED"' >&2
-	# /sbin/logread | grep "SDCard Read/Wrire test PASSED"
-	# if [ $? = 0 ]
-	# then
-	# 	echo 'Found: "SDCard Read/Wrire test PASSED"' >&2
-	# else
-	# 	/legato/systems/current/bin/app stop YellowTest
-	# 	echo '"SDCard Read/Wrire test FAILED"' >&2
-	# 	failure_msg='FAILED: Cannot find: "SDCard Read/Wrire test PASSED"'
-	# 	test_result="FAILED"
-	# 	return 1
-	# fi
-
-	#echo 'Checking message "Read accelerometer and gyroscope connection: PASSED"' >&2
-	/sbin/logread | grep "Read accelerometer and gyroscope connection: PASSED"
-	if [ $? = 0 ]
-	then
-		echo 'Read accelerometer and gyroscope: PASSED' >&2
-	else
-		echo 'Read accelerometer and gyroscope: FAILED' >&2
-		/legato/systems/current/bin/app stop YellowTest
-		failure_msg='FAILED: Cannot find: "Read accelerometer and gyroscope: PASSED"'
-		test_result="FAILED"
-		return 1
-	fi
-
-	/legato/systems/current/bin/app stop YellowTest
-	failure_msg=""
-	test_result="PASSED"
-	return 0
+    test_result="FAILED"
+    return 1
 }
 
 # Main Test
@@ -890,182 +673,112 @@ fail_count=0
 failure_msg=""
 test_result=""
 
-# 8. Wait for software-controlled tri-colour LED to turn green (ready for manual test);
-echo "=== yellowManualTest_initial ==="
-yellowManualTest_initial
-if [ $? != 0 ]
-then
-	fail_count=$(($fail_count + 1))
-	echo "----->               FAILURE           <-----"
-	echo "$failure_msg"
-else
-	echo "$test_result"
-fi
-echo '======================================================================='
-
-# 9. Press button and listen for buzzer;
-echo "=== test_buzzer ==="
-test_buzzer
-if [ $? != 0 ]
-then
-	fail_count=$(($fail_count + 1))
-	echo "----->               FAILURE           <-----"
-	echo "$failure_msg"
-	echo "--------------------------------------------"
-else
-	echo "$test_result"
-fi
-
-# 10. Plug in headset;
-# 11. Say something into headset, and listen for own voice echoed back through headset;
-# 12. Press button to switch audio test mode (software-controlled tri-colour LED goes yellow);
-# 13. Say something into the on-board microphone;
-# 14. Listen for your own voice echoed back through headset;
-
-# 15. Bring NFC tag reader close to the mangOH board and confirm green LED flashes;
-#     (On-board test software should look for the NFC Field Detection interrupt.)
-
-# 16. Cover light sensor with finger and confirm software-controlled tri-colour LED goes blue;
-#     (On-board test software should look for light sensor interrupt.)
-# 17. Uncover light sensor and confirm LED returns to yellow;
-echo "=== test_light_sensor ==="
-test_light_sensor
-if [ $? != 0 ]
-then
-	fail_count=$(($fail_count + 1))
-	echo "----->               FAILURE           <-----"
-	echo "$failure_msg"
-else
-	echo "$test_result"
-fi
-echo '======================================================================='
-
-# EEPROM testing
-echo "=== Start EEPROM testing ==="
-write_eeprom
-if [ $? != 0 ]
-then
-	fail_count=$(($fail_count + 1))
-	echo "----->               FAILURE           <-----"
-	echo "$failure_msg"
-else
-	echo "$test_result"
-fi
-echo '======================================================================='
-
-# 18. Switch cellular antenna selection DIP switch;
-# 19. Press button to finalize the test;
-#     (On-board test software should verify that the correct string has been written to the NFC tag.)
-# 20. Confirm software-controlled tri-colour LED has changed to white;
-# 21. Confirm hardware-controlled LED is yellow;
-
-echo "=== yellowManualTest_final ==="
-yellowManualTest_final
-if [ $? != 0 ]
-then
-	fail_count=$(($fail_count + 1))
-	echo "----->               FAILURE           <-----"
-	echo "$failure_msg"
-else
-	echo "$test_result"
-fi
-echo '======================================================================='
-
-# 22. Press reset button;
-# 23. Confirm hardware-controlled LED goes green;
-# 24. Remove power jumper;
-# 25. Disconnect from USB;
-# 26. Disconnect battery;
-# 27. Unplug SIM, SD card, IoT card and expansion-connector test board.
-
-# WaitForDevice "Up" "$rbTimer"
+/legato/systems/current/bin/app start spiService
 
 # automation test
-# Wifi Test
 echo "=== Start Wifi testing ==="
-yellowTest_WifiScan
-if [ $? != 0 ]
+if ! yellowTest_WifiScan
 then
-	fail_count=$(($fail_count + 1))
-	echo "----->               FAILURE           <-----"
-	echo "$failure_msg"
+    fail_count=$(($fail_count + 1))
+    echo "----->               FAILURE           <-----"
+    echo "$failure_msg"
 else
-	echo "$test_result"
+    echo "$test_result"
 fi
 echo '======================================================================='
-
-# uSD Test
-# USB Test
 
 echo "=== Start USB testing ==="
-yellowTest_USB
-if [ $? != 0 ]
+if ! yellowTest_USB
 then
-	fail_count=$(($fail_count + 1))
-	echo "----->               FAILURE           <-----"
-	echo "$failure_msg"
+    fail_count=$(($fail_count + 1))
+    echo "----->               FAILURE           <-----"
+    echo "$failure_msg"
 else
-	echo "$test_result"
+    echo "$test_result"
 fi
 echo '======================================================================='
 
-#Automation test
-echo "=== Start automation testing ==="
-test_automation
-if [ $? != 0 ]
+echo "=== Start self-testing ==="
+if ! self_test
 then
-	fail_count=$(($fail_count + 1))
-	echo "----->               FAILURE           <-----"
-	echo "$failure_msg"
+    fail_count=$(($fail_count + 1))
+    echo "----->               FAILURE           <-----"
+    echo "$failure_msg"
 else
-	echo "$test_result"
+    echo "$test_result"
 fi
 echo '======================================================================='
 
 # echo "=== Start uSD Read Write testing ==="
-# yellowTest_uSD
-# if [ $? != 0 ]
+# if ! yellowTest_uSD
 # then
-# 	fail_count=$(($fail_count + 1))
-# 	echo "----->               FAILURE           <-----"
-# 	echo "$failure_msg" 
+#   fail_count=$(($fail_count + 1))
+#   echo "----->               FAILURE           <-----"
+#   echo "$failure_msg"
 # else
-# 	echo "$test_result"
+#   echo "$test_result"
 # fi
 # echo '======================================================================='
 
-
-# I2C address test.
 echo "=== Start I2C testing ==="
-yellowTest_I2CDetect
-if [ $? != 0 ]
+if ! yellowTest_I2CDetect
 then
-	fail_count=$(($fail_count + 1))
-	echo "----->               FAILURE           <-----"
-	echo "$failure_msg"
+    fail_count=$(($fail_count + 1))
+    echo "----->               FAILURE           <-----"
+    echo "$failure_msg"
 else
-	echo "$test_result"
+    echo "$test_result"
 fi
 echo '======================================================================='
 
+# Manual tests start here
+echo "=== yellowManualTest_initial ==="
+if ! yellowManualTest_initial
+then
+    fail_count=$(($fail_count + 1))
+    echo "----->               FAILURE           <-----"
+    echo "$failure_msg"
+else
+    echo "$test_result"
+fi
+echo '======================================================================='
+
+echo "=== test_buzzer ==="
+if ! test_buzzer
+then
+    fail_count=$(($fail_count + 1))
+    echo "----->               FAILURE           <-----"
+    echo "$failure_msg"
+    echo "--------------------------------------------"
+else
+    echo "$test_result"
+fi
+
+echo "=== test_light_sensor ==="
+if ! test_light_sensor
+then
+    fail_count=$(($fail_count + 1))
+    echo "----->               FAILURE           <-----"
+    echo "$failure_msg"
+else
+    echo "$test_result"
+fi
+echo '======================================================================='
+
+
 # export test result
 echo '-----------------------------------------------------------------------'
-if [ $fail_count = 0 ]
+if [ $fail_count -ne 0 ]
 then
-	echo "Completed: success"
-else
-	echo "Completed: $fail_count tests failed"
+    echo "FAILURE: $fail_count tests failed"
 fi
 echo ""
 
-# deinitial generic button
-generic_button_deinit
-if [ $? != 0 ]
+# uninitialize generic button
+if ! generic_button_deinit
 then
-	echo "Failed to deinitial Generic Button"
-	exit -1
+    echo "Failed to uninitialize Generic Button"
+    exit -1
 fi
-sleep 1
-
 
 exit $fail_count

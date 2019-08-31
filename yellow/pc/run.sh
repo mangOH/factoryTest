@@ -1,210 +1,306 @@
 #!/bin/bash
-# Disable colors if stdout is not a tty
-if [ -t 1 ]; then
-	COLOR_TITLE="\\033[1;94m"
-	COLOR_ERROR="\\033[0;31m"
-	COLOR_WARN="\\033[0;93m"
-	COLOR_PASS="\\033[0;32m"
-	COLOR_RESET="\\033[0m"
-else
-	COLOR_TITLE=""
-	COLOR_ERROR=""
-	COLOR_WARN=""
-	COLOR_PASS=""
-	COLOR_RESET=""
-fi
 
-# testing variables
-TEST_RESULT="p"
+# Clean up background processes and exit immediately on SIGHUP, SIGINT or SIGTERM.
+trap 'printf "\nINTERRUPT RECEIVED. EXITING.\n" ; kill $console_cat_pid ; kill $log_monitor_pid ; exit 1' 1 2 15
 
-# Configuration loading
+COLOR_TITLE=""
+COLOR_ERROR=""
+COLOR_WARN=""
+COLOR_PASS=""
+COLOR_RESET=""
+
+# Enable colors if stdout is a tty
+#if [ -t 1 ]; then
+#    COLOR_TITLE="\\033[1;94m"
+#    COLOR_ERROR="\\033[0;31m"
+#    COLOR_WARN="\\033[0;93m"
+#    COLOR_PASS="\\033[0;32m"
+#    COLOR_RESET="\\033[0m"
+#fi
+
+# Load configuration settings
 source ./configuration.cfg
-# Libraries poll
+
+# Load utility functions
 source ./lib/common.sh
 
+# Find the PIDs of the child processes of a given PID.
+find_children()
+{
+    ps -f | awk "\$3 == $1 { print \$2 }"
+}
 
 target_setup() {
-	
-	# 1. Plug in SIM, microSD card, IoT test card, and expansion-connector test board;
-	# 2. Connect power jumper across pins 2 & 3;
-	# 3. Confirm "battery protect" switch is ON (preventing the device from booting on battery power);
-	# 4. Connect battery;
-	# 5. Switch "battery protect" switch OFF (allowing the device to boot on battery power);
 
-	prompt_char "Plug in SIM, microSD card, IoT test card, and expansion-connector test board then press ENTER"
-	prompt_char "Connect power jumper across pins 1 & 2 then press ENTER"
-	prompt_char "Confirm \"battery protect\" switch is OFF (preventing the device from booting on battery power)then press ENTER"
-	prompt_char "Connect battery press ENTER"
-	prompt_char "Switch battery protect switch ON then press ENTER"
+    # 1. Plug in SIM, microSD card, IoT test card, and expansion-connector test board;
+    # 2. Connect power jumper;
+    # 3. Confirm "battery protect" switch is ON (preventing the device from booting on battery power);
+    # 4. Connect battery;
+    # 5. Switch "battery protect" switch OFF (allowing the device to boot on battery power);
 
-	local resp=""
-	while [ "$resp" != "Y" ] && [ "$resp" != "N" ]
-	do
-		local resp=$(prompt_char "Do you see hardware-controlled tri-colour LED goes green? (Y/N)")
-	done
-	if [ "$resp" = "N" ]
-	then
-		echo "Hardware-controlled tri-colour LED doens't go green. Switch battery protect doesn't work." >&2
-		failure_msg="hardware-controlled tri-colour LED has problem"
-		test_result="FAILED"
-		return 1
-	fi
+    prompt_enter "Confirm power switch is closest to corner of the board"
 
-	prompt_char "Connect unit to USB hub (both console and main USB) then press ENTER"
-	WaitForDevice "Up" "$rbTimer"
+    prompt=$(echo "Plug in"
+             echo " 1. SIM"
+             echo " 2. microSD card"
+             echo " 3. IoT test card"
+             echo " 4. Battery"
+             echo " 5. Power jumper (on pins closest to edge of board)"
+             echo "Then switch power switch (away from corner of the board)")
+    prompt_enter "$prompt"
 
-	#remove and generate ssh key
-	ssh-keygen -R $TARGET_IP 
+    # Record this as the start time of the test.
+    run_time=$(date +"%Y-%m-%d-%H:%M:%S")
 
-	#Check connection
-	SshToTarget "/legato/systems/current/bin/cm info"
-	
-	# Install .spk
-	# install by swflash is faster than fwupdate download
-	#swiflash -m "wp76xx" -i "./firmware/yellow_final_$TARGET_TYPE.spk" 
-	echo -e "${COLOR_TITLE}Flash Image${COLOR_RESET}"
-	cat "./firmware/yellow_final_$TARGET_TYPE.spk" | SshToTarget "/legato/systems/current/bin/fwupdate download -" &
-	bgid=$!
-	WaitForDevice "Down" "$rbTimer"
-	WaitForDevice "Up" "$rbTimer"
-	# # Kill flash image process
-	pbgid=$(($bgid + 2))
-	kill $bgid
-	wait $bgid
-	kill -9 $pbgid 
-	sleep 5
+    if ! prompt_yes_no "Did the hardware-controlled LED turn green?"
+    then
+        echo "Hardware-controlled LED didn't go green."
+        failure_msg="hardware-controlled LED or power switch has a problem"
+        test_result="f"
+        return 1
+    fi
 
-	prompt_char "Press Reset button then press ENTER"
+    prompt_enter "Connect unit to PC USB ports (CON first, then USB)"
 
-	local resp=""
-	while [ "$resp" != "Y" ] && [ "$resp" != "N" ]
-	do
-		local resp=$(prompt_char "Confirm hardware-controlled LED goes green? (Y/N)")
-	done
-	if [ "$resp" = "N" ]
-	then
-		echo  "Reset button has problem." >&2
-		failure_msg="Reset button has problem"
-		test_result="FAILED"
-		return 1
-	fi
+    (stty 115200 -echo -echonl && cat) < /dev/ttyUSB0 > console.log &
+    console_bash_pid=$!
+    sleep 1
+    console_cat_pid=$(find_children $console_bash_pid)
+    echo "Console capture process IDs: $console_bash_pid $console_cat_pid"
 
-	WaitForDevice "Up" "$rbTimer"
+    echo ""
+    echo "========================================================"
+    echo "**** Programming and automated testing starting now ****"
+    echo "========================================================"
+    echo "This will take a long time."
+    echo ""
 
-	# create test folder
-	echo -e "${COLOR_TITLE}Creating testing folder${COLOR_RESET}"
-	SshToTarget "mkdir -p /tmp/yellow_testing/system"
+    WaitForDevice "Up" "$rbTimer"
 
-	# push test script
-	echo -e "${COLOR_TITLE}Pushing test scripts${COLOR_RESET}"
-	ScpToTarget "./configuration.cfg" "/tmp/yellow_testing/"
-	ScpToTarget "./test_scripts/yellow_test.sh" "/tmp/yellow_testing/"
+    #remove and generate ssh key
+    ssh-keygen -R $TARGET_IP
 
-	# install system
-	testingSysIndex=$(($(GetCurrentSystemIndex) + 1))
-	echo -e "${COLOR_TITLE}Installing testing system${COLOR_TITLE}"
-	cat "./system/yellow_factory_test.$TARGET_TYPE.update" | SshToTarget "/legato/systems/current/bin/update"
-	WaitForSystemToStart $testingSysIndex
-	sleep 40
+    # Check connection, log modem info, and stop the blinking of the software-controlled LED
+    if ! SshToTarget "/legato/systems/current/bin/cm info"
+    then
+        echo "Failed to get cellular modem info from device."
+        return 1
+    fi
 
-	# start SPI service before install apps
-	SshToTarget "/legato/systems/current/bin/app start spiService"
+    # Install .spk
+    # install by swiflash is faster than fwupdate download
+    echo -e "${COLOR_TITLE}Flash Image${COLOR_RESET}"
+    swiflash -m "$TARGET_TYPE" -i "./firmware/yellow_final_$TARGET_TYPE.spk"
+    WaitForDevice "Up" "$rbTimer"
 
-	run_time=$(date +"%Y-%m-%d-%H:%M:%S")
-	imei=$(SshToTarget "/legato/systems/current/bin/cm info imei")
+    # Stop the board from blinking.
+    if ! SshToTarget "/legato/systems/current/bin/config set helloYellow:/enableInstantGrat false bool"
+    then
+        echo "Failed to disable blinking lights on device."
+        return 1
+    fi
 
-	return 0
-}
+    # Switch to the external SIM slot.
+    if ! SshToTarget '/bin/echo > /dev/ttyAT && /bin/echo "at!uims=0" > /dev/ttyAT'
+    then
+        echo "Failed to switch the device to external SIM slot."
+        return 1
+    fi
 
-target_start_test() {
+    # install system
+    testingSysIndex=$(($(GetCurrentSystemIndex) + 1))
+    echo -e "${COLOR_TITLE}Installing testing system${COLOR_RESET}"
+    if ! cat "./system/yellow_factory_test.$TARGET_TYPE.update" | SshToTarget "/legato/systems/current/bin/update" > /dev/null
+    then
+        echo "Failed to load test software system onto the device."
+        return 1
+    fi
+    WaitForSystemToStart $testingSysIndex
 
-	TEST_LOG=$(SshToTarget "/bin/sh /tmp/yellow_testing/yellow_test.sh")
+    # We need to do the reset button test here because a bunch of stuff doesn't work
+    # until a hardware reset happens, for some reason.  This needs to be fixed in the
+    # on-board software so that this reset is not necessary.
+    # NOTE: It may be possible to avoid having the human press the reset button here if we
+    #       assert GPIO 6 (to do a system reset, hard resetting everything outside the module)
+    #       followed by a reboot.  But, this idea has not yet been tested.
+    if ! test_reset_button
+    then
+        TEST_RESULT="f"
+        return 1
+    fi
 
-	#Check all test step is passed 
-	if [[ ${TEST_LOG[@]} == *"Completed: success"* ]]; then
-	 	write_test_result
-	 	#echo $TEST_LOG
-	 	return 0
-	fi
+    WaitForDevice "Up" "$rbTimer"
 
-	return 1
-}
+    # create test folder
+    echo -e "${COLOR_TITLE}Creating testing folder${COLOR_RESET}"
+    SshToTarget "mkdir -p /tmp/yellow_testing"
 
-target_cleanup() {
+    # push test script to the device under test and run it.
+    echo -e "${COLOR_TITLE}Pushing test scripts${COLOR_RESET}"
+    ScpToTarget "./configuration.cfg" "/tmp/yellow_testing/"
+    ScpToTarget "./test_scripts/yellow_test.sh" "/tmp/yellow_testing/"
 
-	echo -e "${COLOR_TITLE}Get System Log ${COLOR_RESET}"
-	GetSysLog $imei $run_time
+    imei="$(SshToTarget "/legato/systems/current/bin/cm info imei")"
 
-	echo -e "${COLOR_TITLE}Restoring target${COLOR_RESET}"
-
-	# remove tmp folder?
-	echo -e "${COLOR_TITLE}Removing testing folder${COLOR_RESET}"
-	SshToTarget "/bin/rm -rf /tmp/yellow_testing"
-
-	# restore golden legato?
-	echo -e "${COLOR_TITLE}Restoring Legato${COLOR_RESET}"
-	if ! RestoreGoldenLegato
-	then
-		TEST_RESULT="f"
-		echo -e "${COLOR_ERROR}Failed to restore Legato to Golden state${COLOR_RESET}"
-	fi
-
-	echo -e "${COLOR_TITLE}Test is finished${COLOR_RESET}"
-	prompt_char "Disconnect from USB then press ENTER"
-	prompt_char "Disconnect battery,Unplug SIM, SD card, IoT card and expansion-connector test board.then press ENTER"
-	prompt_char "Then press ENTER to end testing then press ENTER"
-
-}
-
-write_test_result () {
-	local eeprom_path=""
-
-	echo -e "${COLOR_TITLE}Writing Test Result${COLOR_RESET}"
-
-	if [ "$TARGET_TYPE" = "wp85" ]
-	then
-		local eeprom_path="/sys/bus/i2c/devices/0-0050/eeprom"
-	else
-		if [ "$TARGET_TYPE" = "wp76xx" ]
-		then
-			local eeprom_path="/sys/bus/i2c/devices/4-0050/eeprom"
-		fi
-	fi
-
-	local time_str=$(date +"%Y-%m-%d-%H:%M")
-
-	local msg="mangOH Yellow\\\\nRev: 1.0\\\\nDate: $time_str\\\\nMfg: Talon Communications\\\\0"
-
-	if [ "$TEST_RESULT" = "f" ]
-	then
-		return 1
-	else
-		SshToTarget "/bin/echo -n -e $msg > $eeprom_path"
-	fi
+    echo "Fetched device IMEI: $imei"
 
     return 0
 }
 
-# main program
-if ! target_setup
-then
-	TEST_RESULT="f"
-	echo -e "${COLOR_ERROR}Failed to setup target${COLOR_RESET}"
-	exit
-fi
+test_reset_button() {
 
-if ! target_start_test
-then
-	TEST_RESULT="f"
-	echo -e "${COLOR_ERROR}Testing Failed${COLOR_RESET}"
-fi
+    prompt_enter "Press Reset button"
 
-if ! target_cleanup
-then
-	TEST_RESULT="f"
-	echo -e "${COLOR_ERROR}Failed to cleanup target${COLOR_RESET}"
-fi
+    if ! prompt_yes_no "Did the hardware-controlled LED go green?"
+    then
+        failure_msg="Reset button has problem"
+        echo "$failure_msg"
+        test_result="f"
+        return 1
+    fi
 
-EchoPassOrFail $TEST_RESULT
+    return 0
+}
 
-GetTestLog $imei $run_time
+target_self_test() {
+
+    SshToTarget "/bin/ash /tmp/yellow_testing/yellow_test.sh 2>&1"
+}
+
+target_cleanup() {
+
+    echo -e "${COLOR_TITLE}Get System Log ${COLOR_RESET}"
+    GetSysLog $imei $run_time
+    echo -e "${COLOR_TITLE}Restoring target${COLOR_RESET}"
+
+    # restore golden legato
+    echo -e "${COLOR_TITLE}Restoring Legato${COLOR_RESET}"
+    if ! RestoreGoldenLegato
+    then
+        TEST_RESULT="f"
+        echo -e "${COLOR_ERROR}Failed to restore Legato to Golden state${COLOR_RESET}"
+    fi
+
+    echo -e "${COLOR_TITLE}Test is finished${COLOR_RESET}"
+
+    # Stop recording the console output.
+    echo "Killing console logging processes."
+    kill $console_bash_pid
+    kill $console_cat_pid
+
+    prompt_enter "Unplug the USB cables and switch the power switch (closer to the corner of the board)"
+    prompt_enter "Remove the battery, SIM, SD card and IoT card (leave the power jumper on the board)"
+}
+
+program_eeprom () {
+
+    if [ "$TEST_RESULT" != "p" ]
+    then
+        return 1
+    fi
+
+    local eeprom_path=""
+
+    echo -e "${COLOR_TITLE}Programming EEPROM${COLOR_RESET}"
+
+    if [ "$TARGET_TYPE" = "wp85" ]
+    then
+        local eeprom_path="/sys/bus/i2c/devices/0-0050/eeprom"
+    else
+        if [ "$TARGET_TYPE" = "wp76xx" -o "$TARGET_TYPE" = "wp77xx" ]
+        then
+            local eeprom_path="/sys/bus/i2c/devices/4-0050/eeprom"
+        fi
+    fi
+
+    local time_str=$(date +"%Y-%m-%d-%H:%M")
+
+    local msg="mangOH Yellow\nRev: 1.0\nDate: $time_str\nMfg: Talon Communications\n\0"
+
+    if SshToTarget "printf '$msg' > $eeprom_path"
+    then
+        if SshToTarget "cat '$eeprom_path' | grep 'mangOH Yellow'" > /dev/null
+        then
+            return 0
+        fi
+    fi
+
+    echo "Failed to program EEPROM!"
+
+    return 1
+}
+
+run_test()
+{
+    if ! target_setup
+    then
+        TEST_RESULT="f"
+        echo -e "${COLOR_ERROR}Failed to setup target${COLOR_RESET}"
+
+    elif ! target_self_test
+    then
+        TEST_RESULT="f"
+        echo -e "${COLOR_ERROR}Testing Failed${COLOR_RESET}"
+    else
+        if ! program_eeprom
+        then
+            TEST_RESULT="f"
+        fi
+    fi
+
+    if ! target_cleanup
+    then
+        TEST_RESULT="f"
+        echo -e "${COLOR_ERROR}Failed to cleanup target${COLOR_RESET}"
+    fi
+}
+
+prompt_enter "Make sure your PC system clock is set to the correct time"
+
+while true
+do
+    run_time=
+    imei=
+    log_monitor_pid=
+    console_cat_pid=
+    console_bash_pid=
+
+    TEST_RESULT="p"
+
+    # Create a log file and start a background process to copy its contents
+    # to stdout.  This will be what the human tester actually sees while the
+    # test is running. All of the test output goes through this file so we
+    # can save it to the results directory after the test completes.
+    touch test.log
+    tail -f test.log &
+    log_monitor_pid=$!
+    echo "Log monitoring process ID: $log_monitor_pid"
+
+    run_test > test.log 2>&1
+
+    echo "Killing log monitoring process"
+    kill $log_monitor_pid
+
+    if [ "$TEST_RESULT" = "p" ]
+    then
+        printf "\nFinal result: [PASSED]\n" >> test.log
+    else
+        printf "\nFinal result: [FAILED]\n" >> test.log
+    fi
+
+    # Move the test log and the console log into the results directory.
+    mv test.log "results/$imei/testlog_$run_time"
+    mv console.log "results/$imei/console_$run_time"
+
+    if [ "$TEST_RESULT" = "p" ]
+    then
+        printf "\nFinal result: [PASSED]\n"
+    else
+        printf "\nFinal result: [FAILED]\n"
+    fi
+
+    if ! prompt_yes_no "More units to test?"
+    then
+        exit 0
+    fi
+done
