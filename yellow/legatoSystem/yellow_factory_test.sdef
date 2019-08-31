@@ -1,0 +1,92 @@
+//--------------------------------------------------------------------------------------------------
+// mangOH system definition for the mangOH Yellow board.
+//
+// Copyright (C) Sierra Wireless Inc.
+//--------------------------------------------------------------------------------------------------
+
+#include "shared.sdef"
+
+
+buildVars:
+{
+    MANGOH_BOARD = yellow
+
+    LEGATO_WIFI_PA = ${CURDIR}/linux_kernel_modules/cypwifi/scripts/pa_wifi.sh
+
+#if ${MANGOH_WP_CHIPSET_9X07} = 1
+    MANGOH_BME680_I2C_BUS = 6
+#elif ${MANGOH_WP_CHIPSET_9X15} = 1
+    MANGOH_BME680_I2C_BUS = 2
+#endif
+}
+
+
+apps:
+{
+//	apps/YellowSensorToCloud/imu
+//	apps/YellowSensorToCloud/light
+//	apps/YellowSensorToCloud/button
+//	apps/Bme680EnvironmentalSensor/environment
+//	apps/DataHub-Buzzer/buzzer
+//	apps/YellowOnBoardActuators/leds
+//	apps/BatteryService/battery
+//	apps/VegasMode/vegasMode
+//
+//	apps/Welcome/helloYellow
+    apps/YellowTestService/YellowTestService
+    apps/YellowTest/YellowTest
+
+	$LEGATO_ROOT/apps/tools/devMode
+}
+
+
+bindings:
+{
+//	battery.dhubIO -> dataHub.io
+//	light.dhubIO -> dataHub.io
+//	button.dhubIO -> dataHub.io
+//	button.gpio -> gpioService.le_gpioPin25
+//	environment.dhubIO -> dataHub.io
+//	vegasMode.dhubIO -> dataHub.io
+}
+
+
+commands:
+{
+//	hello = helloYellow:/bin/hello
+}
+
+
+interfaceSearch:
+{
+//	apps/BatteryService
+//	apps/Bme680EnvironmentalSensor
+//	apps/YellowSensorToCloud/interfaces
+}
+
+
+componentSearch:
+{
+//	apps/BatteryService
+//	apps/YellowSensorToCloud/components
+}
+
+
+kernelModules:
+{
+    linux_kernel_modules/mangoh/mangoh_yellow_dev
+    linux_kernel_modules/bmi160/bmi160-i2c
+    linux_kernel_modules/bmi160/bmi160
+    linux_kernel_modules/bmm150/bmc150_magn_i2c
+    linux_kernel_modules/bmm150/bmc150_magn
+    linux_kernel_modules/rtc-pcf85063/rtc-pcf85063
+    linux_kernel_modules/rtc_sync/rtc_sync
+    linux_kernel_modules/bq25601/bq25601
+    linux_kernel_modules/bq27xxx/bq27xxx_battery
+    linux_kernel_modules/opt300x/opt300x
+    linux_kernel_modules/expander/expander
+    linux_kernel_modules/cypwifi/cypwifi
+    linux_kernel_modules/cp2130/cp2130
+    linux_kernel_modules/iot_test_card/ads1015
+    linux_kernel_modules/iot_test_card/iot_test_card
+}

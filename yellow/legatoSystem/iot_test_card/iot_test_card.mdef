@@ -1,0 +1,24 @@
+cflags:
+{
+    -DDEBUG
+}
+
+sources:
+{
+    iot_test_card.c
+    //ads1015.c
+}
+
+params:
+{
+
+}
+
+requires:
+{
+    kernelModules:
+    {
+        $CURDIR/../mangoh/mangoh_yellow_dev
+        $CURDIR/ads1015
+    }
+}

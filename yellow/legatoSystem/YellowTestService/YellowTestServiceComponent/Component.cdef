@@ -1,0 +1,37 @@
+sources:
+{
+    YellowTestServiceComponent.c
+    uart.c
+}
+
+cflags:
+{
+    -std=c99
+}
+
+requires:
+{
+    api:
+    {
+        modemServices/le_sim.api
+        modemServices/le_mrc.api
+        modemServices/le_adc.api
+        le_gpioPin7 = le_gpio.api
+        le_gpioPin2 = le_gpio.api
+        CTS_TEST = le_gpio.api
+        RTS_TEST = le_gpio.api
+    }
+    component:
+    {
+        ../fileUtils
+    }
+
+}
+
+provides:
+{
+    api:
+    {
+        $CURDIR/../yellow_test.api
+    }
+}

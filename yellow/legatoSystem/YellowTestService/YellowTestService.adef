@@ -1,0 +1,52 @@
+sandboxed: false
+executables:
+{
+    yellowtestservice = ( YellowTestServiceComponent )
+}
+
+processes:
+{
+    envVars:
+    {
+        LE_LOG_LEVEL = DEBUG
+    }
+
+    run:
+    {
+        ( yellowtestservice )
+    }
+
+    maxCoreDumpFileBytes: 512K
+    maxFileBytes: 512K
+}
+
+start: manual
+
+bindings:
+{
+    yellowtestservice.YellowTestServiceComponent.le_sim -> modemService.le_sim
+    yellowtestservice.YellowTestServiceComponent.le_mrc -> modemService.le_mrc
+    yellowtestservice.YellowTestServiceComponent.le_adc -> modemService.le_adc
+    yellowtestservice.YellowTestServiceComponent.le_gpioPin7 -> gpioService.le_gpioPin7
+    yellowtestservice.YellowTestServiceComponent.le_gpioPin2 -> gpioService.le_gpioPin2
+    //yellowtestservice.YellowTestServiceComponent.le_spi -> spiService.le_spi
+    yellowtestservice.YellowTestServiceComponent.CTS_TEST -> gpioService.le_gpioPin8
+    yellowtestservice.YellowTestServiceComponent.RTS_TEST -> gpioService.le_gpioPin13
+}
+
+requires:
+{
+    device:
+    {
+        [rw]    /dev/i2c-4  /dev/i2c-4
+        //[rw]    /dev/spidev1.0 /dev/spidev1.0
+    }
+}
+
+extern:
+{
+    yellowtestservice.YellowTestServiceComponent.yellow_test
+}
+
+version: 1.0.0
+maxFileSystemBytes: 512K

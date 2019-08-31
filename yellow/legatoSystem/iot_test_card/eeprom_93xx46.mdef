@@ -1,0 +1,9 @@
+cflags:
+{
+    -DDEBUG
+}
+
+sources:
+{
+    eeprom_93xx46.c
+}

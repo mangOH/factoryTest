@@ -1,0 +1,31 @@
+sandboxed: false
+executables:
+{
+    yellowtest = ( YellowTestComponent )
+}
+
+processes:
+{
+    envVars:
+    {
+        LE_LOG_LEVEL = DEBUG
+    }
+
+    run:
+    {
+        ( yellowtest )
+    }
+
+    maxCoreDumpFileBytes: 512K
+    maxFileBytes: 512K
+}
+
+start: manual
+
+bindings:
+{
+    yellowtest.YellowTestComponent.yellow_test -> YellowTestService.yellow_test
+}
+
+version: 1.0.0
+maxFileSystemBytes: 512K

@@ -1,0 +1,9 @@
+cflags:
+{
+    -DDEBUG
+}
+
+sources:
+{
+    ads1015.c
+}
