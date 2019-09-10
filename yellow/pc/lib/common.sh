@@ -614,18 +614,59 @@ WaitForAntennaStatus()
 #==========================================================================================
 WaitForSystemToStart()
 {
+    echo "Waiting for legato to restart..."
+
     local waitTime=100
     local timePast=0
 
     while [ $timePast -ne $waitTime ]; do
         system_index=$(GetCurrentSystemIndex 2> /dev/null)
         if [ "$system_index" == "$1" ]; then
+
+            echo "Condition satisfied. Moving on..."
             return 0
         fi
 
         timePast=$((timePast+1))
         sleep 1
     done
+
+    echo "Timed out!"
+
+    return 1
+}
+
+
+#=== FUNCTION =============================================================================
+#
+#        NAME: WaitForFileToExist
+# DESCRIPTION: Wait for a given file to appear in the file system on the target device.
+# PARAMETER 1: file path
+#
+#   RETURNS 0: Success
+#           1: Failure
+#
+#==========================================================================================
+WaitForFileToExist()
+{
+    echo "Waiting for '$1' to appear on the target..."
+
+    local waitTime=100
+    local timePast=0
+
+    while [ $timePast -ne $waitTime ]
+    do
+        if SshToTarget "test -f '$1'"
+        then
+            echo "Condition satisfied. Moving on..."
+            return 0
+        fi
+
+        timePast=$((timePast+1))
+        sleep 1
+    done
+
+    echo "Timed out!"
 
     return 1
 }
