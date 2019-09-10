@@ -42,10 +42,9 @@ target_setup() {
 
     prompt=$(echo "Plug in"
              echo " 1. SIM"
-             echo " 2. microSD card"
-             echo " 3. IoT test card"
-             echo " 4. Battery"
-             echo " 5. Power jumper (on pins closest to edge of board)"
+             echo " 2. IoT test card"
+             echo " 3. Battery"
+             echo " 4. Power jumper (on pins closest to edge of board)"
              echo "Then switch power switch (away from corner of the board)")
     prompt_enter "$prompt"
 
@@ -189,7 +188,7 @@ target_cleanup() {
     kill $console_cat_pid
 
     prompt_enter "Unplug the USB cables and switch the power switch (closer to the corner of the board)"
-    prompt_enter "Remove the battery, SIM, SD card and IoT card (leave the power jumper on the board)"
+    prompt_enter "Remove the battery, SIM and IoT card (leave power jumper installed)"
 }
 
 program_eeprom () {
