@@ -13,7 +13,7 @@
 #include <linux/eeprom_93cx6.h>
 #include <linux/platform_data/at24.h>
 
-#include "../mangoh/mangoh_common.h"
+#include "mangoh/mangoh_common.h"
 
 /*
  *-----------------------------------------------------------------------------

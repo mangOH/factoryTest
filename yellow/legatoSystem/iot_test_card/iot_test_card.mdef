@@ -14,11 +14,16 @@ params:
 
 }
 
+cflags:
+{
+    -I$MANGOH_ROOT/linux_kernel_modules
+}
+
 requires:
 {
     kernelModules:
     {
-        $CURDIR/../mangoh/mangoh_yellow_dev
+        $MANGOH_ROOT/linux_kernel_modules/mangoh/mangoh_yellow_dev
         $CURDIR/ads1015
     }
 }
