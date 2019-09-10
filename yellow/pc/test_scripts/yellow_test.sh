@@ -429,7 +429,7 @@ yellowManualTest_initial() {
 #===============================================================================
 yellowTest_WifiScan() {
 
-    # sleep 30
+    /legato/systems/current/bin/app start wifiService
 
     /legato/systems/current/bin/wifi client start
     if [ $? -eq 0 ]
@@ -644,20 +644,17 @@ self_test() {
 
     echo "Starting automated tests daemon..."
 
-    if ! /legato/systems/current/bin/app start YellowTestService
-    then
-        failure_msg="Failed to start automated testing service daemon"
-    else
-        echo "Running Automated Tests..."
+    /legato/systems/current/bin/app start YellowTestService
 
-        if /legato/systems/current/bin/yellowtest
-        then
-            failure_msg=""
-            test_result="PASSED"
-            return 0
-        else
-            failure_msg="On-device automated tests failed"
-        fi
+    echo "Running Automated Tests..."
+
+    if /legato/systems/current/bin/yellowtest
+    then
+        failure_msg=""
+        test_result="PASSED"
+        return 0
+    else
+        failure_msg="On-device automated tests failed"
     fi
 
     test_result="FAILED"
