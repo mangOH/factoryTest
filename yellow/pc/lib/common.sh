@@ -623,8 +623,10 @@ WaitForSystemToStart()
         system_index=$(GetCurrentSystemIndex 2> /dev/null)
         if [ "$system_index" == "$1" ]; then
 
-            echo "Condition satisfied. Moving on..."
-            return 0
+            # Make sure the Update Daemon is up before declaring that Legato is up.
+            WaitForProcessToExist updateDaemon
+
+            return $?
         fi
 
         timePast=$((timePast+1))
@@ -656,7 +658,42 @@ WaitForFileToExist()
 
     while [ $timePast -ne $waitTime ]
     do
-        if SshToTarget "test -f '$1'"
+        if SshToTarget "/usr/bin/test -f '$1'"
+        then
+            echo "Condition satisfied. Moving on..."
+            return 0
+        fi
+
+        timePast=$((timePast+1))
+        sleep 1
+    done
+
+    echo "Timed out!"
+
+    return 1
+}
+
+
+#=== FUNCTION =============================================================================
+#
+#        NAME: WaitForProcessToExist
+# DESCRIPTION: Wait for a process with a given name to appear on the target device.
+# PARAMETER 1: process name
+#
+#   RETURNS 0: Success
+#           1: Failure
+#
+#==========================================================================================
+WaitForProcessToExist()
+{
+    echo "Waiting for process '$1' to appear on the target..."
+
+    local waitTime=100
+    local timePast=0
+
+    while [ $timePast -ne $waitTime ]
+    do
+        if SshToTarget "/bin/ps aux | /bin/grep ' $1' | /bin/grep -v grep"
         then
             echo "Condition satisfied. Moving on..."
             return 0
