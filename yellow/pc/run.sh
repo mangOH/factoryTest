@@ -86,11 +86,15 @@ target_setup() {
         return 1
     fi
 
+    # Figure out what system index we should expect to be at after the .spk is installed.
+    testingSysIndex=$(($(GetCurrentSystemIndex) + 1))
+
     # Install .spk
     # install by swiflash is faster than fwupdate download
     echo -e "${COLOR_TITLE}Flash Image${COLOR_RESET}"
     swiflash -m "$TARGET_TYPE" -i "./firmware/yellow_final_$TARGET_TYPE.spk"
     WaitForDevice "Up" "$rbTimer"
+    WaitForSystemToStart $testingSysIndex
 
     # Stop the board from blinking.
     if ! SshToTarget "/legato/systems/current/bin/config set helloYellow:/enableInstantGrat false bool"
@@ -214,7 +218,7 @@ program_eeprom () {
 
     local time_str=$(date +"%Y-%m-%d-%H:%M")
 
-    local msg="mangOH Yellow\nRev: 1.0\nDate: $time_str\nMfg: Talon Communications\n\0"
+    local msg="mangOH Yellow\nRev: $BOARD_REV\nDate: $time_str\nMfg: $MANUFACTURER\n\0"
 
     if SshToTarget "printf '$msg' > $eeprom_path"
     then
