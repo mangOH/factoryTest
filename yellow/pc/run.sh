@@ -51,9 +51,9 @@ target_setup() {
     # Record this as the start time of the test.
     run_time=$(date +"%Y-%m-%d-%H:%M:%S")
 
-    if ! prompt_yes_no "Did the hardware-controlled LED turn green?"
+    if ! prompt_yes_no "Did the hardware-controlled LED turn green or yellow?"
     then
-        echo "Hardware-controlled LED didn't go green."
+        echo "Hardware-controlled LED didn't go green/yellow."
         failure_msg="hardware-controlled LED or power switch has a problem"
         test_result="f"
         return 1
@@ -151,9 +151,9 @@ test_reset_button() {
 
     prompt_enter "Press Reset button"
 
-    if ! prompt_yes_no "Did the hardware-controlled LED go green?"
+    if ! prompt_yes_no "Did the hardware-controlled LED go green or yellow?"
     then
-        failure_msg="Reset button has problem"
+        failure_msg="Reset button has a problem"
         echo "$failure_msg"
         test_result="f"
         return 1
