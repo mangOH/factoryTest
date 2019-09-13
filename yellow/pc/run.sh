@@ -86,15 +86,12 @@ target_setup() {
         return 1
     fi
 
-    # Figure out what system index we should expect to be at after the .spk is installed.
-    testingSysIndex=$(($(GetCurrentSystemIndex) + 1))
-
     # Install .spk
     # install by swiflash is faster than fwupdate download
     echo -e "${COLOR_TITLE}Flash Image${COLOR_RESET}"
     swiflash -m "$TARGET_TYPE" -i "./firmware/yellow_final_$TARGET_TYPE.spk"
     WaitForDevice "Up" "$rbTimer"
-    WaitForSystemToStart $testingSysIndex
+    WaitForProcessToExist updateDaemon
 
     # Stop the board from blinking.
     if ! SshToTarget "/legato/systems/current/bin/config set helloYellow:/enableInstantGrat false bool"
