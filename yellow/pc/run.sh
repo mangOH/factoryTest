@@ -107,6 +107,14 @@ target_setup() {
         return 1
     fi
 
+    # Disable auto-start of the modem GNSS subsystem.
+    # This works around a bug in the Positioning Service in Legato 19.07 (LE-11753).
+    if ! SshToTarget '/bin/echo > /dev/ttyAT && /bin/echo "at!gpsautostart=0" > /dev/ttyAT'
+    then
+        echo "Failed to disable auto-start of the GNSS subsystem."
+        return 1
+    fi
+
     # install system
     testingSysIndex=$(($(GetCurrentSystemIndex) + 1))
     echo -e "${COLOR_TITLE}Installing testing system${COLOR_RESET}"
