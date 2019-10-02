@@ -2,7 +2,7 @@
  * @Description Check SIM state
  *
  * @return
- *  return LE_OK if success, otherwise LE_FAULT  
+ *  return LE_OK if success, otherwise LE_FAULT
 **/
 
 FUNCTION le_result_t CheckSimState
@@ -13,7 +13,7 @@ FUNCTION le_result_t CheckSimState
  * @Description Check signal strength quality
  * @parameter [OUT] qual (signal strength quality)
  * @return
- *  return LE_OK if success, otherwise LE_FAULT  
+ *  return LE_OK if success, otherwise LE_FAULT
 **/
 
 FUNCTION le_result_t MeasureSignalStrength
@@ -25,7 +25,7 @@ FUNCTION le_result_t MeasureSignalStrength
 /**
  * @Description Test SD Card
  * @return
- *  return LE_OK if success, otherwise LE_FAULT  
+ *  return LE_OK if success, otherwise LE_FAULT
 **/
 
 
@@ -39,7 +39,7 @@ FUNCTION le_result_t AcceGyroRead
  * @Description Check id BatteryVoltage
  * @parameter [OUT] data
  * @return
- *  return LE_OK if success, otherwise LE_FAULT  
+ *  return LE_OK if success, otherwise LE_FAULT
 **/
 
 FUNCTION le_result_t BatteryVoltage
@@ -48,13 +48,11 @@ FUNCTION le_result_t BatteryVoltage
 );
 
 /**
- * @Description Read ADC via I2C IoT Card
- * @parameter [OUT] data
- * @return
- *  return LE_OK if success, otherwise LE_FAULT  
-**/
-
-FUNCTION le_result_t IoTCardReadADCs
+ * Read IoT test card power supply ADCs via I2C
+ *
+ * @return LE_OK if success, otherwise LE_FAULT
+ */
+FUNCTION le_result_t ReadIoTCardPowerViaI2C
 (
     int32 adc1 OUT,
     int32 adc2 OUT,
@@ -63,13 +61,11 @@ FUNCTION le_result_t IoTCardReadADCs
 );
 
 /**
- * @Description Check id ADC3
- * @parameter [OUT] data
- * @return
- *  return LE_OK if success, otherwise LE_FAULT  
-**/
-
-FUNCTION le_result_t Adc3Read
+ * Read the IoT card slot ADC.
+ *
+ * @return LE_OK if success, otherwise LE_FAULT
+ */
+FUNCTION le_result_t ReadIoTCardSlotADC
 (
     int32 value OUT
 );
@@ -77,7 +73,7 @@ FUNCTION le_result_t Adc3Read
 /**
  * @Description Check id IoTCardReset
  * @return
- *  return LE_OK if success, otherwise LE_FAULT  
+ *  return LE_OK if success, otherwise LE_FAULT
 **/
 
 FUNCTION le_result_t IoTCardReset
@@ -87,7 +83,7 @@ FUNCTION le_result_t IoTCardReset
 /**
  * @Description Check id yellow_test_UARTLoopBack
  * @return
- *  return LE_OK if success, otherwise LE_FAULT  
+ *  return LE_OK if success, otherwise LE_FAULT
 **/
 
 FUNCTION le_result_t UARTLoopBack
@@ -97,7 +93,7 @@ FUNCTION le_result_t UARTLoopBack
 /**
  * @Description Test Read/Write EEPROM SPI
  * @return
- *  return LE_OK if success, otherwise LE_FAULT  
+ *  return LE_OK if success, otherwise LE_FAULT
 **/
 
 //FUNCTION le_result_t SPIEeprom

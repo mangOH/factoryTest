@@ -250,11 +250,12 @@ le_result_t yellow_test_BatteryVoltage
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Check: read ADCs on the IoT Test Board using I2C
+ * Read IoT test card power supply ADCs via I2C
  *
+ * @return LE_OK if success, otherwise LE_FAULT
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t yellow_test_IoTCardReadADCs
+le_result_t yellow_test_ReadIoTCardPowerViaI2C
 (
     int32_t* adc1,
     int32_t* adc2,
@@ -301,18 +302,19 @@ done:
 }
 //--------------------------------------------------------------------------------------------------
 /**
- * Check: Read ADC on IOT Test Card using ADC.
+ * Read the IoT card slot ADC.
  *
+ * @return LE_OK if success, otherwise LE_FAULT
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t yellow_test_Adc3Read
+le_result_t yellow_test_ReadIoTCardSlotADC
 (
     int32_t* value
 )
 {
     le_result_t result;
 
-    result = le_adc_ReadValue("EXT_ADC3", value);
+    result = le_adc_ReadValue("EXT_ADC0", value);
 
     if (result == LE_FAULT)
     {

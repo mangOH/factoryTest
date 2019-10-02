@@ -3,7 +3,6 @@
 
 #define BMI160_REG_CHIP_ID 0x00
 
-static int32_t adc3_value = 0;
 static int32_t battery_value = 0;
 
 static int32_t adc1_i2c_value = 0;
@@ -88,13 +87,22 @@ COMPONENT_INIT
     }
 
     testDesc = "IoT card power and I2C";
-    res = yellow_test_IoTCardReadADCs(&adc1_i2c_value, &adc2_i2c_value, &adc3_i2c_value, &adc4_i2c_value);
-    if(res == LE_OK)
+    res = yellow_test_ReadIoTCardPowerViaI2C(&adc1_i2c_value,
+                                             &adc2_i2c_value,
+                                             &adc3_i2c_value,
+                                             &adc4_i2c_value);
+    if (res == LE_OK)
     {
-        LE_INFO("ADC1, ADC2, ADC3, ADC4 is: %d, %d, %d, %d",adc1_i2c_value, adc2_i2c_value,
-                                                            adc3_i2c_value, adc4_i2c_value);
+        LE_INFO("IoT card power ADC readings: %d, %d, %d, %d",
+                adc1_i2c_value,
+                adc2_i2c_value,
+                adc3_i2c_value,
+                adc4_i2c_value);
 
-        if (adc1_i2c_value > 900 && adc2_i2c_value > 900 && adc3_i2c_value > 900 && adc4_i2c_value > 900)
+        if (   (adc1_i2c_value > 900)
+            && (adc2_i2c_value > 900)
+            && (adc3_i2c_value > 900)
+            && (adc4_i2c_value > 900) )
         {
             Pass(testDesc);
         }
@@ -134,12 +142,13 @@ COMPONENT_INIT
     }
 
     testDesc = "IoT slot ADC";
-    res = yellow_test_Adc3Read(&adc3_value);
+    int32_t iotCardSlotAdcValue;
+    res = yellow_test_ReadIoTCardSlotADC(&iotCardSlotAdcValue);
     if (res == LE_OK)
     {
-        if (adc3_value < 900)
+        if (iotCardSlotAdcValue < 900)
         {
-            LE_CRIT("ADC3 is %d",adc3_value);
+            LE_CRIT("ADC3 is %d", iotCardSlotAdcValue);
             Fail(testDesc, LE_OUT_OF_RANGE);
         }
         else
