@@ -55,7 +55,6 @@ target_setup() {
     then
         echo "Hardware-controlled LED didn't go green/yellow."
         failure_msg="hardware-controlled LED or power switch has a problem"
-        test_result="f"
         return 1
     fi
 
@@ -79,24 +78,10 @@ target_setup() {
     #remove and generate ssh key
     ssh-keygen -R $TARGET_IP
 
-    # Check connection, log modem info, and stop the blinking of the software-controlled LED
+    # Check connection and log modem info.
     if ! SshToTarget "/legato/systems/current/bin/cm info"
     then
         echo "Failed to get cellular modem info from device."
-        return 1
-    fi
-
-    # Install .spk
-    # install by swiflash is faster than fwupdate download
-    echo -e "${COLOR_TITLE}Flash Image${COLOR_RESET}"
-    swiflash -m "$TARGET_TYPE" -i "./firmware/yellow_final_$TARGET_TYPE.spk"
-    WaitForDevice "Up" "$rbTimer"
-    WaitForProcessToExist updateDaemon
-
-    # Stop the board from blinking.
-    if ! SshToTarget "/legato/systems/current/bin/config set helloYellow:/enableInstantGrat false bool"
-    then
-        echo "Failed to disable blinking lights on device."
         return 1
     fi
 
@@ -122,6 +107,20 @@ target_setup() {
         return 1
     fi
 
+    # Install .spk
+    # install by swiflash is faster than fwupdate download
+    echo -e "${COLOR_TITLE}Flash Image${COLOR_RESET}"
+    swiflash -m "$TARGET_TYPE" -i "./firmware/yellow_final_$TARGET_TYPE.spk"
+    WaitForDevice "Up" "$rbTimer"
+    WaitForProcessToExist updateDaemon
+
+    # Stop the board from blinking.
+    if ! SshToTarget "/legato/systems/current/bin/config set helloYellow:/enableInstantGrat false bool"
+    then
+        echo "Failed to disable blinking lights on device."
+        return 1
+    fi
+
     # install system
     testingSysIndex=$(($(GetCurrentSystemIndex) + 1))
     echo -e "${COLOR_TITLE}Installing testing system${COLOR_RESET}"
@@ -140,7 +139,6 @@ target_setup() {
     #       followed by a reboot.  But, this idea has not yet been tested.
     if ! test_reset_button
     then
-        TEST_RESULT="f"
         return 1
     fi
 
@@ -170,7 +168,6 @@ test_reset_button() {
     then
         failure_msg="Reset button has a problem"
         echo "$failure_msg"
-        test_result="f"
         return 1
     fi
 
