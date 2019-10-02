@@ -100,6 +100,13 @@ target_setup() {
         return 1
     fi
 
+    # Change GPIO 6 to RESET_OUT.
+    if ! SshToTarget '/bin/echo > /dev/ttyAT && /bin/echo "at+wiocfg=6,0" > /dev/ttyAT'
+    then
+        echo "Failed to enable RESET_OUT."
+        return 1
+    fi
+
     # Switch to the external SIM slot.
     if ! SshToTarget '/bin/echo > /dev/ttyAT && /bin/echo "at!uims=0" > /dev/ttyAT'
     then
