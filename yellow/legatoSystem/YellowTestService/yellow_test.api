@@ -36,10 +36,9 @@ FUNCTION le_result_t AcceGyroRead
 );
 
 /**
- * @Description Check id BatteryVoltage
- * @parameter [OUT] data
- * @return
- *  return LE_OK if success, otherwise LE_FAULT
+ * Read the battery voltage ADC.
+ *
+ * @return LE_OK if success, otherwise LE_FAULT
 **/
 
 FUNCTION le_result_t BatteryVoltage
@@ -67,6 +66,7 @@ FUNCTION le_result_t ReadIoTCardPowerViaI2C
  */
 FUNCTION le_result_t ReadIoTCardSlotADC
 (
+    string boardRev[12] IN, ///< String containing the board revision (e.g., "DV3" or "1.0").
     int32 value OUT
 );
 

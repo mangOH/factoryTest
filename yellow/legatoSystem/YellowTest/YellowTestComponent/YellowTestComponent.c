@@ -12,6 +12,8 @@ static int32_t adc4_i2c_value = 0;
 
 static bool ExitStatus = EXIT_SUCCESS;
 
+/// Board revision string. E.g., "DV3" or "1.0".
+static const char* BoardRev;
 
 static void Pass(const char* testDescription)
 {
@@ -45,6 +47,8 @@ static void ReportResult(const char* testDescription, le_result_t resultCode)
 
 COMPONENT_INIT
 {
+    BoardRev = le_arg_GetArg(0);
+
     putenv("PATH=/legato/systems/current/bin:/usr/local/bin:"
              "/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin");
 
@@ -143,12 +147,14 @@ COMPONENT_INIT
 
     testDesc = "IoT slot ADC";
     int32_t iotCardSlotAdcValue;
-    res = yellow_test_ReadIoTCardSlotADC(&iotCardSlotAdcValue);
+    res = yellow_test_ReadIoTCardSlotADC(BoardRev, &iotCardSlotAdcValue);
     if (res == LE_OK)
     {
+        LE_INFO("IoT card slot ADC reading = %" PRId32, iotCardSlotAdcValue);
+
         if (iotCardSlotAdcValue < 900)
         {
-            LE_CRIT("ADC3 is %d", iotCardSlotAdcValue);
+            LE_CRIT("IoT card ADC is out of range (< 900) for board rev (%s)", BoardRev);
             Fail(testDesc, LE_OUT_OF_RANGE);
         }
         else

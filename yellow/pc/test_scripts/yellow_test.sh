@@ -648,7 +648,7 @@ self_test() {
 
     echo "Running Automated Tests..."
 
-    if /legato/systems/current/bin/yellowtest
+    if /legato/systems/current/bin/yellowtest $BOARD_REV
     then
         failure_msg=""
         test_result="PASSED"

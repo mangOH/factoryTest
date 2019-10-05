@@ -228,7 +228,7 @@ le_result_t yellow_test_AcceGyroRead
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Check: Read ADC on IOT Test Card.
+ * Check: Read ADC connected to battery power.
  *
  */
 //--------------------------------------------------------------------------------------------------
@@ -300,6 +300,7 @@ le_result_t yellow_test_ReadIoTCardPowerViaI2C
 done:
     return result;
 }
+
 //--------------------------------------------------------------------------------------------------
 /**
  * Read the IoT card slot ADC.
@@ -309,19 +310,27 @@ done:
 //--------------------------------------------------------------------------------------------------
 le_result_t yellow_test_ReadIoTCardSlotADC
 (
+    const char* boardRev, ///< String containing the board revision.
     int32_t* value
 )
 {
-    le_result_t result;
+    const char* adcId = "EXT_ADC0";
 
-    result = le_adc_ReadValue("EXT_ADC0", value);
-
-    if (result == LE_FAULT)
+    // DV3 boards use ADC3 for this.
+    if (strcmp(boardRev, "DV3") == 0)
     {
-        LE_INFO("Couldn't get ADC value");
+        adcId = "EXT_ADC3";
     }
 
-    return result;
+    le_result_t result = le_adc_ReadValue(adcId, value);
+
+    if (result != LE_OK)
+    {
+        LE_CRIT("Couldn't get ADC value (%s)", LE_RESULT_TXT(result));
+        return LE_FAULT;
+    }
+
+    return LE_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
