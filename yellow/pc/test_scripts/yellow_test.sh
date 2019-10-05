@@ -298,17 +298,20 @@ ButtonMonitor() {
 # DESCRIPTION: Read value of light sensor
 #   PARAMETER: None
 #
-#      PRINTS: Light sensor value in illuminance
+#      PRINTS: Light sensor value
 #     RETURNS: 0 on success, 1 on failure
 #
 #===============================================================================
 read_light_sensor() {
-    local light_sensor_path="/sys/bus/iio/devices/iio:device1/in_illuminance_input"
-    if ! local light_value=$(cat $light_sensor_path | sed 's/\..*$//')
+    local light_sensor_path="/sys/bus/iio/devices/iio:device1/in_intensity_input"
+    if ! local light_value=$(cat $light_sensor_path)
     then
         echo "ERROR: can't read $light_sensor_path" >&2
         return 1
     fi
+
+    # Drop the decimal places.
+    local light_value=$(echo "$light_value" | sed 's/\..*$//')
 
     echo "Light Sensor Value: '$light_value'" >&2
 
@@ -345,10 +348,10 @@ test_light_sensor() {
         return 1
     fi
 
-    # The difference in the reading should be more than 10 times brighter when
+    # The difference in the reading should be more than twice brighter when
     # uncovered vs when covered with a finger.
-    covered_times_ten=$(dc $covered_light 10 * p)
-    if [ $covered_times_ten -ge $uncovered_light ]
+    covered_times_two=$(dc $covered_light 2 * p)
+    if [ $covered_times_two -ge $uncovered_light ]
     then
         failure_msg="Light sensor has a problem"
         echo "$failure_msg"

@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Clean up background processes and exit immediately on SIGHUP, SIGINT or SIGTERM.
-trap 'printf "\nINTERRUPT RECEIVED. EXITING.\n" ; kill $console_cat_pid ; kill $log_monitor_pid ; exit 1' 1 2 15
-
 COLOR_TITLE=""
 COLOR_ERROR=""
 COLOR_WARN=""
@@ -70,7 +67,7 @@ target_setup() {
     echo "========================================================"
     echo "**** Programming and automated testing starting now ****"
     echo "========================================================"
-    echo "This will take a long time."
+    echo "This will take up to 3 minutes."
     echo ""
 
     WaitForDevice "Up" "$rbTimer"
@@ -162,9 +159,9 @@ target_setup() {
 
 test_reset_button() {
 
-    prompt_enter "Press Reset button"
+    prompt_enter "Press Reset button while watching the hardware-controlled LED"
 
-    if ! prompt_yes_no "Did the hardware-controlled LED go green or yellow?"
+    if ! prompt_yes_no "Did the hardware-controlled LED go green when the reset button was pressed?"
     then
         failure_msg="Reset button has a problem"
         echo "$failure_msg"
@@ -179,7 +176,33 @@ target_self_test() {
     SshToTarget "/bin/ash /tmp/yellow_testing/yellow_test.sh 2>&1"
 }
 
+check_console_log() {
+
+    local CONSOLE_TEXT="swi-mdm9x28-wp login"
+
+    # Check the size of the console.log.
+    if [ $(stat -c %s console.log) -lt 1000 ]
+    then
+        echo "The console logs are smaller than expected." >&2
+        return 1
+
+    # Grep for something we know should be in the log.
+    elif ! grep "$CONSOLE_TEXT" console.log > /dev/null 2>&1
+    then
+        echo "'$CONSOLE_TEXT' not found in the console log." >&2
+        return 1
+    fi
+}
+
 target_cleanup() {
+
+    # Switch back to the internal SIM
+    # WARNING: this only works for WP76 and WP77.
+    if ! SshToTarget '/bin/echo > /dev/ttyAT && /bin/echo "at!uims=1" > /dev/ttyAT'
+    then
+        echo "Failed to switch the device to external SIM slot."
+        TEST_RESULT="f"
+    fi
 
     echo -e "${COLOR_TITLE}Get System Log ${COLOR_RESET}"
     GetSysLog $imei $run_time
@@ -202,6 +225,8 @@ target_cleanup() {
 
     prompt_enter "Unplug the USB cables and switch the power switch (closer to the corner of the board)"
     prompt_enter "Remove the battery, SIM and IoT card (leave power jumper installed)"
+
+    test "$TEST_RESULT" != "f"
 }
 
 program_eeprom () {
@@ -253,11 +278,16 @@ run_test()
     then
         TEST_RESULT="f"
         echo -e "${COLOR_ERROR}Testing Failed${COLOR_RESET}"
-    else
-        if ! program_eeprom
-        then
-            TEST_RESULT="f"
-        fi
+
+    elif ! check_console_log
+    then
+        TEST_RESULT="f"
+        echo -e "${COLOR_ERROR}Testing Failed${COLOR_RESET}"
+
+    elif ! program_eeprom
+    then
+        TEST_RESULT="f"
+        echo -e "${COLOR_ERROR}EEPROM Programming Failed${COLOR_RESET}"
     fi
 
     if ! target_cleanup
@@ -268,6 +298,23 @@ run_test()
 }
 
 prompt_enter "Make sure your PC system clock is set to the correct time"
+
+while true
+do
+    printf "\nTest Configuration Settings:\n"
+    echo     "----------------------------"
+    egrep '^ *[A-Z_]+=' ./configuration.cfg
+
+    if prompt_yes_no "Are these settings correct?"
+    then
+        break
+    fi
+
+    nano ./configuration.cfg || exit 1
+done
+
+# Clean up background processes and exit immediately on SIGHUP, SIGINT or SIGTERM.
+trap 'printf "\nINTERRUPT RECEIVED. EXITING.\n" ; kill $console_cat_pid ; kill $log_monitor_pid ; exit 1' 1 2 15
 
 while true
 do
