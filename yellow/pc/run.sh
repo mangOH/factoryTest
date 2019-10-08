@@ -50,8 +50,9 @@ target_setup() {
 
     if ! prompt_yes_no "Did the hardware-controlled LED turn green or yellow?"
     then
-        echo "Hardware-controlled LED didn't go green/yellow."
-        failure_msg="hardware-controlled LED or power switch has a problem"
+        failure_msg="Hardware-controlled LED didn't go green/yellow."
+        echo "$failure_msg"
+        echo "$failure_msg" >> failure.log
         return 1
     fi
 
@@ -78,21 +79,27 @@ target_setup() {
     # Check connection and log modem info.
     if ! SshToTarget "/legato/systems/current/bin/cm info"
     then
-        echo "Failed to get cellular modem info from device."
+        failure_msg="Failed to get cellular modem info from device."
+        echo "$failure_msg"
+        echo "$failure_msg" >> failure.log
         return 1
     fi
 
     # Change GPIO 6 to RESET_OUT.
     if ! SshToTarget '/bin/echo > /dev/ttyAT && /bin/echo "at+wiocfg=6,0" > /dev/ttyAT'
     then
-        echo "Failed to enable RESET_OUT."
+        failure_msg="Failed to enable RESET_OUT."
+        echo "$failure_msg"
+        echo "$failure_msg" >> failure.log
         return 1
     fi
 
     # Switch to the external SIM slot.
     if ! SshToTarget '/bin/echo > /dev/ttyAT && /bin/echo "at!uims=0" > /dev/ttyAT'
     then
-        echo "Failed to switch the device to external SIM slot."
+        failure_msg="Failed to switch the device to external SIM slot."
+        echo "$failure_msg"
+        echo "$failure_msg" >> failure.log
         return 1
     fi
 
@@ -100,7 +107,9 @@ target_setup() {
     # This works around a bug in the Positioning Service in Legato 19.07 (LE-11753).
     if ! SshToTarget '/bin/echo > /dev/ttyAT && /bin/echo "at!gpsautostart=0" > /dev/ttyAT'
     then
-        echo "Failed to disable auto-start of the GNSS subsystem."
+        failure_msg="Failed to disable auto-start of the GNSS subsystem."
+        echo "$failure_msg"
+        echo "$failure_msg" >> failure.log
         return 1
     fi
 
@@ -114,7 +123,9 @@ target_setup() {
     # Stop the board from blinking.
     if ! SshToTarget "/legato/systems/current/bin/config set helloYellow:/enableInstantGrat false bool"
     then
-        echo "Failed to disable blinking lights on device."
+        failure_msg="Failed to disable blinking lights on device."
+        echo "$failure_msg"
+        echo "$failure_msg" >> failure.log
         return 1
     fi
 
@@ -123,7 +134,9 @@ target_setup() {
     echo -e "${COLOR_TITLE}Installing testing system${COLOR_RESET}"
     if ! cat "./system/yellow_factory_test.$TARGET_TYPE.update" | SshToTarget "/legato/systems/current/bin/update" > /dev/null
     then
-        echo "Failed to load test software system onto the device."
+        failure_msg="Failed to load test software system onto the device."
+        echo "$failure_msg"
+        echo "$failure_msg" >> failure.log
         return 1
     fi
     WaitForSystemToStart $testingSysIndex
@@ -165,6 +178,7 @@ test_reset_button() {
     then
         failure_msg="Reset button has a problem"
         echo "$failure_msg"
+        echo "$failure_msg" >> failure.log
         return 1
     fi
 
@@ -173,25 +187,43 @@ test_reset_button() {
 
 target_self_test() {
 
-    SshToTarget "/bin/ash /tmp/yellow_testing/yellow_test.sh 2>&1"
+    if ! SshToTarget "/bin/ash /tmp/yellow_testing/yellow_test.sh 2>&1"
+    then
+        failure_msg="Target self-tests failed."
+        echo "$failure_msg" >> failure.log
+        return 1
+    fi
 }
 
 check_console_log() {
 
+    # This is something we expect to be found in the log.
     local CONSOLE_TEXT="swi-mdm9x28-wp login"
 
     # Check the size of the console.log.
-    if [ $(stat -c %s console.log) -lt 1000 ]
+    if ! logSize=$(stat -c %s console.log)
     then
-        echo "The console logs are smaller than expected." >&2
-        return 1
+        failure_msg="Console serial port test failed: Console log file not found. "
 
-    # Grep for something we know should be in the log.
+    # Make sure we successfully captured a significant amount of data in the console log file.
+    elif [ $logSize -lt 1000 ]
+    then
+        failure_msg="Console serial port test failed: Console logs are smaller than expected."
+
+    # Grep for something we know should be in the log, to ensure we're not just receiving
+    # mangled bytes from the serial port.
     elif ! grep "$CONSOLE_TEXT" console.log > /dev/null 2>&1
     then
-        echo "'$CONSOLE_TEXT' not found in the console log." >&2
-        return 1
+        failure_msg="Console serial port test failed: '$CONSOLE_TEXT' not found in the console log."
+    else
+
+        # Everything looks good!
+        return 0
     fi
+
+    echo "$failure_msg" >&2
+    echo "$failure_msg" >> failure.log
+    return 1
 }
 
 target_cleanup() {
@@ -200,7 +232,9 @@ target_cleanup() {
     # WARNING: this only works for WP76 and WP77.
     if ! SshToTarget '/bin/echo > /dev/ttyAT && /bin/echo "at!uims=1" > /dev/ttyAT'
     then
-        echo "Failed to switch the device to external SIM slot."
+        failure_msg="Failed to switch the device to external SIM slot."
+        echo "$failure_msg"
+        echo "$failure_msg" >> failure.log
         TEST_RESULT="f"
     fi
 
@@ -212,8 +246,10 @@ target_cleanup() {
     echo -e "${COLOR_TITLE}Restoring Legato${COLOR_RESET}"
     if ! RestoreGoldenLegato
     then
+        failure_msg="Failed to restore Legato to Golden state."
+        echo -e "${COLOR_ERROR}$failure_msg${COLOR_RESET}"
+        echo "$failure_msg" >> failure.log
         TEST_RESULT="f"
-        echo -e "${COLOR_ERROR}Failed to restore Legato to Golden state${COLOR_RESET}"
     fi
 
     echo -e "${COLOR_TITLE}Test is finished${COLOR_RESET}"
@@ -223,14 +259,15 @@ target_cleanup() {
     kill $console_bash_pid
     kill $console_cat_pid
 
-    prompt_enter "Unplug the USB cables and switch the power switch (closer to the corner of the board)"
-    prompt_enter "Remove the battery, SIM and IoT card (leave power jumper installed)"
+    prompt_enter "Switch OFF the power switch (closer to the corner of the board)"
+    prompt_enter "Remove the USB cables, battery, SIM and IoT card (leave power jumper installed)"
 
     test "$TEST_RESULT" != "f"
 }
 
 program_eeprom () {
 
+    # Don't program the EEPROM if the test failed.
     if [ "$TEST_RESULT" != "p" ]
     then
         return 1
@@ -262,8 +299,9 @@ program_eeprom () {
         fi
     fi
 
-    echo "Failed to program EEPROM!"
-
+    failure_msg="Failed to program EEPROM!"
+    echo "$failure_msg"
+    echo "$failure_msg" >> failure.log
     return 1
 }
 
@@ -277,12 +315,12 @@ run_test()
     elif ! target_self_test
     then
         TEST_RESULT="f"
-        echo -e "${COLOR_ERROR}Testing Failed${COLOR_RESET}"
+        echo -e "${COLOR_ERROR}Target self-tests failed${COLOR_RESET}"
 
     elif ! check_console_log
     then
         TEST_RESULT="f"
-        echo -e "${COLOR_ERROR}Testing Failed${COLOR_RESET}"
+        echo -e "${COLOR_ERROR}Console log check failed${COLOR_RESET}"
 
     elif ! program_eeprom
     then
@@ -326,6 +364,10 @@ do
 
     TEST_RESULT="p"
 
+    # Delete any old failure log file.  This file is used to keep a list of all the failures
+    # that occur during the test, so a summary of all failures can be displayed at the end.
+    rm -f failure.log
+
     # Create a log file and start a background process to copy its contents
     # to stdout.  This will be what the human tester actually sees while the
     # test is running. All of the test output goes through this file so we
@@ -344,6 +386,8 @@ do
     then
         printf "\nFinal result: [PASSED]\n" >> test.log
     else
+        echo >> test.log
+        cat failure.log >> test.log
         printf "\nFinal result: [FAILED]\n" >> test.log
     fi
 
@@ -355,6 +399,8 @@ do
     then
         printf "\nFinal result: [PASSED]\n"
     else
+        echo
+        cat failure.log
         printf "\nFinal result: [FAILED]\n"
     fi
 
