@@ -45,6 +45,9 @@ target_setup() {
              echo "Then switch power switch (away from corner of the board)")
     prompt_enter "$prompt"
 
+    # WP7611 may require this step, but it's harmless for other boards.
+    prompt_enter "Press the reset button"
+
     # Record this as the start time of the test.
     run_time=$(date +"%Y-%m-%d-%H:%M:%S")
 
@@ -116,7 +119,13 @@ target_setup() {
     # Install .spk
     # install by swiflash is faster than fwupdate download
     echo -e "${COLOR_TITLE}Flash Image${COLOR_RESET}"
-    swiflash -m "$TARGET_TYPE" -i "./firmware/yellow_final_$TARGET_TYPE.spk"
+    if ! swiflash -m "$TARGET_TYPE" -i "./firmware/yellow_final_$TARGET_TYPE.spk"
+    then
+        failure_msg="Failed to install factory SPK image."
+        echo "$failure_msg"
+        echo "$failure_msg" >> failure.log
+        return 1
+    fi
     WaitForDevice "Up" "$rbTimer"
     WaitForProcessToExist updateDaemon
 
@@ -129,18 +138,6 @@ target_setup() {
         return 1
     fi
 
-    # install system
-    testingSysIndex=$(($(GetCurrentSystemIndex) + 1))
-    echo -e "${COLOR_TITLE}Installing testing system${COLOR_RESET}"
-    if ! cat "./system/yellow_factory_test.$TARGET_TYPE.update" | SshToTarget "/legato/systems/current/bin/update" > /dev/null
-    then
-        failure_msg="Failed to load test software system onto the device."
-        echo "$failure_msg"
-        echo "$failure_msg" >> failure.log
-        return 1
-    fi
-    WaitForSystemToStart $testingSysIndex
-
     # We need to do the reset button test here because a bunch of stuff doesn't work
     # until a hardware reset happens, for some reason.  This needs to be fixed in the
     # on-board software so that this reset is not necessary.
@@ -151,8 +148,20 @@ target_setup() {
     then
         return 1
     fi
-
     WaitForDevice "Up" "$rbTimer"
+    WaitForProcessToExist updateDaemon
+
+    # install system
+    testingSysIndex=$(($(GetCurrentSystemIndex) + 1))
+    echo -e "${COLOR_TITLE}Installing testing system${COLOR_RESET}"
+    if ! SshToTarget "/legato/systems/current/bin/update" < "./system/yellow_factory_test.$TARGET_TYPE.update" > /dev/null
+    then
+        failure_msg="Failed to load test software system onto the device."
+        echo "$failure_msg"
+        echo "$failure_msg" >> failure.log
+        return 1
+    fi
+    WaitForSystemToStart $testingSysIndex
 
     # create test folder
     echo -e "${COLOR_TITLE}Creating testing folder${COLOR_RESET}"
@@ -174,7 +183,7 @@ test_reset_button() {
 
     prompt_enter "Press Reset button while watching the hardware-controlled LED"
 
-    if ! prompt_yes_no "Did the hardware-controlled LED go green when the reset button was pressed?"
+    if ! prompt_yes_no "Did the hardware-controlled LED blink and turn green when the reset button was pressed?"
     then
         failure_msg="Reset button has a problem"
         echo "$failure_msg"
@@ -336,6 +345,8 @@ run_test()
 }
 
 prompt_enter "Make sure your PC system clock is set to the correct time"
+
+prompt_enter "Make sure there is enough light in the work area for the light sensor test"
 
 while true
 do

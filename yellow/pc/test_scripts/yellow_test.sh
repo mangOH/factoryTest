@@ -125,105 +125,6 @@ genericLED() {
     fi
 }
 
-#=== FUNCTION ==================================================================
-#
-#        NAME: generic_button_init
-# DESCRIPTION: Initial button (GPIO export)
-#   PARAMETER: None
-#
-#     RETURNS: 0  Success
-#            : 1 Failure
-#
-#===============================================================================
-generic_button_init() {
-    if [ -d "/sys/class/gpio/gpio25" ]
-    then
-        echo "Button had been intialized, already"
-    else
-        if ! echo "25" > "/sys/class/gpio/export"
-        then
-            return 1
-        fi
-    fi
-    return 0
-}
-
-#=== FUNCTION ==================================================================
-#
-#        NAME: generic_button_deinit
-# DESCRIPTION: Deinitial button (GPIO unexport)
-#   PARAMETER: None
-#
-#     RETURNS: 0  Success
-#            : -1 Failure
-#
-#===============================================================================
-generic_button_deinit() {
-    if [ -d "/sys/class/gpio/gpio25" ]
-    then
-        if ! echo 25 > "/sys/class/gpio/unexport"
-        then
-            return 1
-        fi
-    else
-        echo "Button had been deintialized, already"
-    fi
-    return 0
-}
-
-#=== FUNCTION ==================================================================
-#
-#        NAME: generic_button_get_state
-# DESCRIPTION: Get generic button's state
-#   PARAMETER: None
-#
-#     RETURNS: pressed/released/unknown
-#
-#===============================================================================
-generic_button_get_state() {
-
-    local buttonFile="/sys/class/gpio/gpio25/value"
-
-    if ! r=$(cat $buttonFile)
-    then
-        echo "ERROR: Failed to read button GPIO file '$buttonFile'" >&2
-        return 1
-    fi
-
-    # NOTE: The button is active-low, so pressed is 0 and released is 1.
-    if [ "$r" = "1" ]
-    then
-        echo "released"
-
-    elif [ "$r" = "0" ]
-    then
-        echo "pressed"
-    else
-        echo "ERROR: Unexpected button state: '$r'" >&2
-        return 1
-    fi
-}
-
-#=== FUNCTION ==================================================================
-#
-#        NAME: buzzer_set
-# DESCRIPTION: Set buzzer frequence
-# PARAMETER 1: frequence 0/1/1024/2048/4096/8192
-#
-#     RETURNS: None
-#
-#===============================================================================
-buzzer_set() {
-    if [ "$TARGET_TYPE" = "wp85" ]
-    then
-        echo "$1" > "/sys/bus/i2c/drivers/rtc-pcf85063/4-0051/clkout_freq"
-    else
-        if [ "$TARGET_TYPE" = "wp76xx" -o "$TARGET_TYPE" = "wp77xx" ]
-        then
-            echo "$1" > "/sys/bus/i2c/drivers/rtc-pcf85063/8-0051/clkout_freq"
-        fi
-    fi
-}
 
 #=== FUNCTION ==================================================================
 #
@@ -237,16 +138,16 @@ buzzer_set() {
 #===============================================================================
 test_buzzer() {
 
-    # Press button and listen for buzzer;
-    # start background function
-    ButtonMonitor &
-    local bgid=$!
+    # Connect button to buzzer in the Data Hub.
+    if ! /legato/systems/current/bin/dhub set source /app/buzzer/enable /app/button/value > /dev/null
+    then
+        failure_msg="Buzzer test failed - Failed to connect button to buzzer"
+        test_result="FAILED"
+        return 1
+    fi
 
     prompt_yes_no "Press generic button and listen for buzzer. Do you hear the buzzer's sound when pressing button?"
     local result=$?
-
-    kill $bgid
-    wait $bgid
 
     if [ $result -ne 0 ]
     then
@@ -260,37 +161,6 @@ test_buzzer() {
     return 0
 }
 
-
-#=== FUNCTION ==================================================================
-#
-#        NAME: ButtonMonitor
-# DESCRIPTION: Monitor the generic button state then do the action respectively
-#            : Should be run in background
-#   PARAMETER: None
-#
-#     RETURNS: 0 on success, 1 on failure
-#
-#===============================================================================
-ButtonMonitor() {
-
-    local last_state=""
-
-    while local button_state=$(generic_button_get_state)
-    do
-        if [ "$last_state" != "$button_state" ]
-        then
-            local last_state="$button_state"
-
-            if [ "$button_state" = "pressed" ]
-            then
-                buzzer_set "4096"
-            else
-                buzzer_set "0"
-            fi
-        fi
-
-    done
-}
 
 #=== FUNCTION ==================================================================
 #
@@ -376,13 +246,6 @@ test_light_sensor() {
 yellowManualTest_initial() {
 
     failure_msg=""
-
-    # initialize generic button
-    if ! generic_button_init
-    then
-        echo "Failed to initialize Generic Button"
-        exit -1
-    fi
 
     triLED "red" "off"
     triLED "green" "off"
@@ -773,12 +636,5 @@ then
     echo "FAILURE: $fail_count tests failed"
 fi
 echo ""
-
-# uninitialize generic button
-if ! generic_button_deinit
-then
-    echo "Failed to uninitialize Generic Button"
-    exit -1
-fi
 
 exit $fail_count

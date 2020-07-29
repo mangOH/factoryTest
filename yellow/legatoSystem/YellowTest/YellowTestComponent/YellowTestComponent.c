@@ -78,7 +78,7 @@ COMPONENT_INIT
     // res = yellow_test_SDCard();
     // ReportResult(testDesc, res);
 
-    testDesc = "SD card read/write test";
+    testDesc = "Battery voltage ADC test";
     res = yellow_test_BatteryVoltage(&battery_value);
     if (res == LE_OK)
     {
