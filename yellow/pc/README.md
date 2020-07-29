@@ -1,4 +1,5 @@
-== To Create a Factory Test PC ==
+To Create a Factory Test PC
+===========================
 
 1. Install Linux Mint or other Ubuntu-based distro.
 2. Copy (recursively) the mangOH factoryTest repository's ```yellow/pc``` directory to ```~/factoryTest/YellowTest_Shell```
@@ -15,3 +16,9 @@ NOTE: This can be done on a USB drive, such that any PC can be booted from this 
         - 438MB - EFI
 	  Larger partitions will take longer to clone and may limit your choice of which USB thumb
 	  drives you can use.
+
+Building an Installer Package
+=============================
+
+To build an executable installer file to update a factory test bench PC, see the instructions
+in the comment at the top of `yellow/pc/updater/create_updater.sh`.

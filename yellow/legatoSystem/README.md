@@ -54,14 +54,3 @@ To build a .update file for use in factory testing,
     ```
 
 The ```.update``` file to be used is now available at mangOH/build/update_files/yellow.wp77xx.update.
-
-This should be copied to ```factoryTest/yellow/pc/system/yellow_factory_test.$(LEGATO_TARGET).update```:
-    ```
-    cp build/update_files/yellow.wp77xx.update ../factoryTest/yellow/pc/system/yellow_factory_test.wp77xx.update
-    ```
-
-Building an Installer Package
-=============================
-
-To build an executable installer file to update a factory test bench PC, see the instructions
-in the comment at the top of `yellow/pc/updater/create_updater.sh`.
